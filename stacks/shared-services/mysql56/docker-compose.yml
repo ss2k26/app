@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  mysql-proxy:
+    image: alpine/socat
+    container_name: mysql56-proxy
+    restart: always
+    ports:
+      # 🔒 Safely bind port 3306 only to the local machine interface (WSL or VPS)
+      - "127.0.0.1:3306:3306"
+    # Forward incoming local traffic to the shared localhost space on port 33060
+    command: tcp-listen:3306,fork,reuseaddr tcp-connect:127.0.0.1:33060
+    networks:
+      - shared-db-network
+
+  mysql:
+    image: mysql:5.6.43
+    container_name: mysql56-shared
+    restart: always
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "true"
+      # MYSQL_ROOT_PASSWORD: your_secure_password
+      # Tell MySQL to listen on port 33060 to avoid a port clash with the proxy on the same network interface
+      MYSQL_TCP_PORT: "33060" 
+    volumes:
+      - /app/data/mysql56:/var/lib/mysql
+    # 🎯 Join the proxy's network namespace so they share 'localhost'
+    network_mode: "service:mysql-proxy"
+    depends_on:
+      - mysql-proxy
+
+networks:
+  shared-db-network:
+    external: true
+    name: shared-db-network

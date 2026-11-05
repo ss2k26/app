@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  bengkel-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bengkel-core-dev
+    restart: always
+    volumes:
+      - /app/htdocs/bengkel:/var/www/html
+      - bengkel-vendor-dev:/var/www/html/vendor
+    networks:
+      - shared-db-network
+      - bengkel-network-dev
+
+  bengkel-web:
+    image: nginx:alpine
+    container_name: bengkel-webserver-dev
+    restart: always
+    volumes:
+      - /app/htdocs/bengkel:/var/www/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - shared-db-network
+      - bengkel-network-dev
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bengkel-dev.rule=Host(`bengkel.mysite.test`)"
+      - "traefik.http.routers.bengkel-dev.entrypoints=websecure"
+      - "traefik.http.routers.bengkel-dev.tls=true"
+      - "traefik.http.services.bengkel-dev-service.loadbalancer.server.port=80"
+
+networks:
+  bengkel-network-dev:
+  shared-db-network:
+    external: true
+    name: shared-db-network
+
+volumes:
+  bengkel-vendor-dev:

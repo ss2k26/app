@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # The Sidecar: Automatically generates the IP certs into your folder on boot if missing
+  cert-generator:
+    image: alpine/mkcert:latest
+    container_name: dev-cert-generator
+    volumes:
+      - .:/root/.local/share/mkcert
+      - .:/certs
+    command: "-cert-file /certs/mysite.test.pem -key-file /certs/mysite.test-key.pem mysite.test *.mysite.test"
+
+  # The Proxy: Monitors and loads the generated certs from the same directory
+  reverse-proxy:
+    image: traefik:v3.7
+    container_name: global-proxy-dev
+    restart: always
+    depends_on:
+      - cert-generator
+    command:
+      - "--core.defaultrulesyntax=v2"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--providers.file.filename=/etc/traefik/dynamic_conf.yml"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8082:8080" # Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./dynamic_conf.yml:/etc/traefik/dynamic_conf.yml:ro
+      - .:/etc/traefik/certs:ro
+    networks:
+      - shared-db-network
+
+networks:
+  shared-db-network:
+    external: true
+    name: shared-db-network

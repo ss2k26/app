@@ -1,0 +1,4 @@
+data
+htdocs
+*.pem
+*.crt
