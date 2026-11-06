@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # 3. Securely hook in Ondřej Surý's Debian DPA using modern keyrings targeting trixie
-RUN curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://sury.org && \
-    echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://sury.org trixie main" \
+RUN curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ trixie main" \
     > /etc/apt/sources.list.d/php.list
 
 # 4. Install fully patched PHP 7.2 core components and Laravel extensions directly via apt

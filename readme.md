@@ -8,14 +8,15 @@ This guide details the steps to initialize, manage, and scale the unified archit
 
 ```text
 /app/ (or D:\app\)
-├── data/                       # Database engine files (e.g., data/mysql56)
-├── htdocs/                     # Laravel source code roots (e.g., htdocs/bengkel)
-└── stacks/                     # Infrastructure & app orchestration stacks
-    ├── shared-services/        # Global proxy, shared database & base images
-    │   ├── base-images/        # Custom environment core Dockerfiles
-    │   ├── mysql56/            # Shared legacy database configurations
-    │   └── proxy-traefik/      # Consolidated Traefik v3.7 gateway engines
-    └── laravel-apps/           # Individual container configuration deployments
+├── data/                          # Database engine files (e.g., data/mysql56)
+├── htdocs/                        # Laravel source code roots (e.g., htdocs/bengkel)
+└── stacks/                        # Infrastructure & app orchestration stacks
+    ├── shared-services/           # Global proxy, shared database & base images
+    │   ├── base-images/           # Custom environment core Dockerfiles
+    │   ├── mysql56/               # Shared legacy database configurations
+    │   ├── proxy-traefik/         # Consolidated Traefik v3.7 gateway engines
+    │   └── dashboard-portainer/   # Management dashboard container folder
+    └── laravel-apps/              # Individual container configuration deployments
 ```
 
 ---
@@ -77,17 +78,12 @@ cd /app/stacks/shared-services/proxy-traefik
 docker compose -f docker-compose-dev.yml up -d
 ```
 
-### 🔒 Removing SSL Security Warnings (One-Time Setup)
-1. Open your Windows Host File Explorer and locate: `D:\app\stacks\shared-services\proxy-traefik\`
-2. Verify Docker has successfully auto-generated the following file tokens:
-   * `mysite.test.pem` *(Local site certificate file)*
-   * `mysite.test-key.pem` *(Private security handshake key)*
-   * `rootCA.pem` *(The Root Certificate Authority foundation file)*
-3. **Install the Windows Root Trust:**
-   * Right-click `rootCA.pem` and rename its file extension from `.pem` to **`.crt`**.
-   * Double-click `rootCA.crt` ➡️ Click **Install Certificate** ➡️ Select **Local Machine**.
-   * Select **"Place all certificates in the following store"** ➡️ Click **Browse**.
-   * Select **Trusted Root Certification Authorities** ➡️ Click **OK** ➡️ **Finish**.
+### 🔒 Removing SSL Security Warnings (Automated Double-Click Setup)
+Once you have started your local development proxy container stack for the first time, navigate to your Windows root application directory and **double-click the `run-cert-install.bat` file**. Accept the Windows Administrator validation prompt to automatically register the Root CA and establish a fully trusted secure green browser experience.
+
+
+### 📋 Automated Windows Domain Registration
+Whenever you create a new application directory inside your portable `/stacks/laravel-apps/` path, navigate to the system root workspace folder on Windows and **double-click the `run-hosts-update.bat` file**. The utility automatically determines the current host drive letter and directory layout relative to its location to map your `.test` domains.
 
 ---
 
@@ -127,3 +123,31 @@ To safely stop application execution and cleanly wipe out the temporary in-memor
 ```bash
 docker compose -f docker-compose-dev.yml down -v
 ```
+
+---
+
+## 🎛️ Management Ecosystem
+
+### Terminal Monitoring (Lazydocker)
+Run the automated shortcut utility to monitor containers, resources, and shared memory socket pipes natively in the command prompt:
+```bash
+ld
+```
+
+### Web Administration Dashboard (Portainer CE)
+Execute the specific layout definition that matches your active proxy stack framework:
+
+* **Dev Environment:**
+  ```bash
+  cd /app/stacks/shared-services/dashboard-portainer
+  docker compose -f docker-compose-dev.yml up -d
+  ```
+* **Production Environment:**
+  ```bash
+  docker compose -f docker-compose-prod.yml up -d
+  ```
+* **Staging Public IP Environment:**
+  ```bash
+  docker compose -f docker-compose-ip.yml up -d
+  ```
+

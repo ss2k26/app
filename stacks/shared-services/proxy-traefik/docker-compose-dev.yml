@@ -1,16 +1,16 @@
 version: '3.8'
 
 services:
-  # The Sidecar: Automatically generates the IP certs into your folder on boot if missing
+  # Sidecar: Generates wildcard cert files into your folder automatically on boot if missing
   cert-generator:
     image: alpine/mkcert:latest
     container_name: dev-cert-generator
     volumes:
-      - .:/root/.local/share/mkcert
-      - .:/certs
+      - /app/stacks/shared-services/proxy-traefik:/root/.local/share/mkcert
+      - /app/stacks/shared-services/proxy-traefik:/certs
     command: "-cert-file /certs/mysite.test.pem -key-file /certs/mysite.test-key.pem mysite.test *.mysite.test"
 
-  # The Proxy: Monitors and loads the generated certs from the same directory
+  # Proxy: Latest Traefik v3.7 Engine
   reverse-proxy:
     image: traefik:v3.7
     container_name: global-proxy-dev
@@ -24,17 +24,22 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
+      # Auto HTTP -> HTTPS redirect
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      - "--providers.file.filename=/etc/traefik/dynamic_conf.yml"
+      # 🚀 The Traefik v3.7 Directory Watcher Fix
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
     ports:
       - "80:80"
       - "443:443"
-      - "8082:8080" # Dashboard
+      - "8082:8080" # Traefik Web UI Dashboard
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./dynamic_conf.yml:/etc/traefik/dynamic_conf.yml:ro
-      - .:/etc/traefik/certs:ro
+      # Mount the configuration folder as the dynamic configuration directory
+      - /app/stacks/shared-services/proxy-traefik:/etc/traefik/dynamic:ro
+      # Mount the folder again so Traefik can see the .pem files inside /etc/traefik/certs/
+      - /app/stacks/shared-services/proxy-traefik:/etc/traefik/certs:ro
     networks:
       - shared-db-network
 

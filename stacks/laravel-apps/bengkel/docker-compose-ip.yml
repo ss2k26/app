@@ -28,7 +28,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.bengkel-ip.rule=HostRegexp(`123.45.67.89`)" # <-- Replace with your real public IP
-      - "traefik.http.routers.bengkel-ip.entrypoints=bengkel-port" # <-- Replace with your custom port entrypoint
+      - "traefik.http.routers.bengkel-ip.entrypoints=laravel-app-bengkel-port" # <-- Replace with your custom port entrypoint
       - "traefik.http.routers.bengkel-ip.tls=true"
       - "traefik.http.services.bengkel-ip-service.loadbalancer.server.port=80"
 

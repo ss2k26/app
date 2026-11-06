@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: global-portainer-ip
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - portainer-data-ip:/data
+    networks:
+      - shared-db-network
+      - internal-portainer-net
+    labels:
+      - "traefik.enable=true"
+      # 1. Capture your VPS public server IP address:
+      - "traefik.http.routers.portainer-ip.rule=HostRegexp(`123.45.67.89`)" # <-- Replace with real IP
+      # 2. Force it to listen on the isolated custom App 2 port entrypoint
+      - "traefik.http.routers.portainer-ip.entrypoints=portainer-port"
+      - "traefik.http.routers.portainer-ip.tls=true"
+      - "traefik.http.services.portainer-ip-service.loadbalancer.server.port=9000"
+
+networks:
+  internal-portainer-net:
+  shared-db-network:
+    external: true
+    name: shared-db-network
+
+volumes:
+  portainer-data-ip:
