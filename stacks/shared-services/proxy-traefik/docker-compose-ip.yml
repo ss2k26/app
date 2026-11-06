@@ -6,8 +6,8 @@ services:
     image: alpine/mkcert:latest
     container_name: ip-cert-generator
     volumes:
-      - /app/stacks/shared-services/proxy-traefik:/root/.local/share/mkcert
-      - /app/stacks/shared-services/proxy-traefik:/certs
+      - /app/stacks/shared-services/proxy-traefik/ip:/root/.local/share/mkcert
+      - /app/stacks/shared-services/proxy-traefik/ip:/certs
     command: "-cert-file /certs/server-ip.pem -key-file /certs/server-ip-key.pem 123.45.67.89" # <-- Replace with real public IP
 
   # Proxy: Latest Traefik v3.7 Engine
@@ -38,9 +38,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Mount the configuration folder as the dynamic configuration directory
-      - /app/stacks/shared-services/proxy-traefik:/etc/traefik/dynamic:ro
+      - /app/stacks/shared-services/proxy-traefik/ip:/etc/traefik/dynamic:ro
       # Mount the folder again so Traefik can read the .pem / .key files
-      - /app/stacks/shared-services/proxy-traefik:/etc/traefik/certs:ro
+      - /app/stacks/shared-services/proxy-traefik/ip:/etc/traefik/certs:ro
     networks:
       - shared-db-network
 

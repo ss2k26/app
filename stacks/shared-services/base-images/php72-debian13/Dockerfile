@@ -56,9 +56,18 @@ RUN groupadd -g 1000 www && useradd -u 1000 -ms /bin/bash -g www www
 # 8. Reconfigured: Switch PHP-FPM from TCP to Shared Unix Socket with proper security flags
 RUN mkdir -p /var/run/php && chown www:www /var/run/php && \
     sed -i 's|listen = /run/php/php7.2-fpm.sock|listen = /var/run/php/php7.2-fpm.sock|' /etc/php/7.2/fpm/pool.d/www.conf && \
+    # 🚀 Forces the sub-worker processes that run your Laravel code to execute securely under 'www'
+    sed -i 's/user = www-data/user = www/' /etc/php/7.2/fpm/pool.d/www.conf && \
+    sed -i 's/group = www-data/group = www/' /etc/php/7.2/fpm/pool.d/www.conf && \
+    # Keeps socket permissions aligned
     sed -i 's/;listen.owner = www-data/listen.owner = www/' /etc/php/7.2/fpm/pool.d/www.conf && \
     sed -i 's/;listen.group = www-data/listen.group = www/' /etc/php/7.2/fpm/pool.d/www.conf && \
-    sed -i 's/;listen.mode = 0660/listen.mode = 0666/' /etc/php/7.2/fpm/pool.d/www.conf
+    sed -i 's/;listen.mode = 0660/listen.mode = 0666/' /etc/php/7.2/fpm/pool.d/www.conf && \
+    sed -i 's|error_log = /var/log/php7.2-fpm.log|error_log = /proc/self/fd/2|' /etc/php/7.2/fpm/php-fpm.conf && \
+    sed -i 's/;daemonize = yes/daemonize = no/' /etc/php/7.2/fpm/php-fpm.conf
+
+# Fix named volume ownership automatically on every boot
+RUN mkdir -p /var/www/html/vendor && chown -R www:www /var/www/html
 
 # Execute the packaged PHP-FPM 7.2 process directly in the foreground
 CMD ["/usr/sbin/php-fpm7.2", "-F"]

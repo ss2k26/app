@@ -1,12 +1,7 @@
 tls:
   certificates:
-    # Local Dev certificates
     - certFile: /etc/traefik/certs/mysite.test.pem
       keyFile: /etc/traefik/certs/mysite.test-key.pem
-
-    # Automated Long-Term Public IP certificates
-    - certFile: /etc/traefik/certs/server-ip.pem
-      keyFile: /etc/traefik/certs/server-ip-key.pem
 
 # 🚀 The Traefik v3 Fix: Force these files to act as the global system default fallback
   stores:

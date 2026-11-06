@@ -1,0 +1,11 @@
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/server-ip.pem
+      keyFile: /etc/traefik/certs/server-ip-key.pem
+
+# 🚀 The Traefik v3 Fix: Force these files to act as the global system default fallback
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/server-ip.pem
+        keyFile: /etc/traefik/certs/server-ip.pem

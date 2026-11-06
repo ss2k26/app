@@ -5,7 +5,6 @@ services:
     image: local/php72-debian13:latest
     container_name: bengkel-core-ip
     restart: always
-    user: "www"
     volumes:
       - /app/htdocs/bengkel:/var/www/html
       - bengkel-vendor-ip:/var/www/html/vendor
@@ -27,6 +26,7 @@ services:
       - bengkel-network-ip
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=shared-db-network"
       - "traefik.http.routers.bengkel-ip.rule=HostRegexp(`123.45.67.89`)" # <-- Replace with your real public IP
       - "traefik.http.routers.bengkel-ip.entrypoints=laravel-app-bengkel-port" # <-- Replace with your custom port entrypoint
       - "traefik.http.routers.bengkel-ip.tls=true"

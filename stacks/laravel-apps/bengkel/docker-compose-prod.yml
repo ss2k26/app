@@ -5,7 +5,6 @@ services:
     image: local/php72-debian13:latest
     container_name: bengkel-core-prod
     restart: always
-    user: "www"
     volumes:
       - /app/htdocs/bengkel:/var/www/html
       - bengkel-vendor-prod:/var/www/html/vendor
@@ -27,6 +26,7 @@ services:
       - bengkel-network-prod
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=shared-db-network"
       - "traefik.http.routers.bengkel-prod.rule=Host(`://yourfirm.com`)"  # <-- Replace with your actual live public domain name string
       - "traefik.http.routers.bengkel-prod.entrypoints=websecure"
       - "traefik.http.routers.bengkel-prod.tls=true"

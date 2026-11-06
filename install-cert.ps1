@@ -9,7 +9,7 @@ if ($ScriptFolder) { $ScriptFolder = $ScriptFolder.Trim() }
 if (-not $ScriptFolder) { $ScriptFolder = $PSScriptRoot }
 
 # Locate the mkcert output folder dynamically relative to wherever this script lives
-$traefikCertsPath = Join-Path $ScriptFolder "stacks\shared-services\proxy-traefik"
+$traefikCertsPath = Join-Path $ScriptFolder "stacks\shared-services\proxy-traefik\dev"
 $rootPemFile = Join-Path $traefikCertsPath "rootCA.pem"
 $rootCrtFile = Join-Path $traefikCertsPath "rootCA.crt"
 

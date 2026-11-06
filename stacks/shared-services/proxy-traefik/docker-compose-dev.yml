@@ -6,8 +6,8 @@ services:
     image: alpine/mkcert:latest
     container_name: dev-cert-generator
     volumes:
-      - /app/stacks/shared-services/proxy-traefik:/root/.local/share/mkcert
-      - /app/stacks/shared-services/proxy-traefik:/certs
+      - /app/stacks/shared-services/proxy-traefik/dev:/root/.local/share/mkcert
+      - /app/stacks/shared-services/proxy-traefik/dev:/certs
     command: "-cert-file /certs/mysite.test.pem -key-file /certs/mysite.test-key.pem mysite.test *.mysite.test"
 
   # Proxy: Latest Traefik v3.7 Engine
@@ -37,9 +37,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Mount the configuration folder as the dynamic configuration directory
-      - /app/stacks/shared-services/proxy-traefik:/etc/traefik/dynamic:ro
+      - /app/stacks/shared-services/proxy-traefik/dev:/etc/traefik/dynamic:ro
       # Mount the folder again so Traefik can see the .pem files inside /etc/traefik/certs/
-      - /app/stacks/shared-services/proxy-traefik:/etc/traefik/certs:ro
+      - /app/stacks/shared-services/proxy-traefik/dev:/etc/traefik/certs:ro
     networks:
       - shared-db-network
 

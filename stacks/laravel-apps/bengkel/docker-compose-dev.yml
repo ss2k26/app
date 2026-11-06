@@ -5,7 +5,6 @@ services:
     image: local/php72-debian13:latest
     container_name: bengkel-core-dev
     restart: always
-    user: "www"
     volumes:
       - /app/htdocs/bengkel:/var/www/html
       - bengkel-vendor-dev:/var/www/html/vendor
@@ -27,6 +26,7 @@ services:
       - bengkel-network-dev
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=shared-db-network"
       - "traefik.http.routers.bengkel-dev.rule=Host(`bengkel.mysite.test`)"
       - "traefik.http.routers.bengkel-dev.entrypoints=websecure"
       - "traefik.http.routers.bengkel-dev.tls=true"
