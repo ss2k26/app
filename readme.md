@@ -11,7 +11,10 @@ This guide details the steps to initialize, manage, and scale the unified archit
 ├── data/                       # Database engine files (e.g., data/mysql56)
 ├── htdocs/                     # Laravel source code roots (e.g., htdocs/bengkel)
 └── stacks/                     # Infrastructure & app orchestration stacks
-    ├── shared-services/        # Global proxy & shared database configurations
+    ├── shared-services/        # Global proxy, shared database & base images
+    │   ├── base-images/        # Custom environment core Dockerfiles
+    │   ├── mysql56/            # Shared legacy database configurations
+    │   └── proxy-traefik/      # Consolidated Traefik v3.7 gateway engines
     └── laravel-apps/           # Individual container configuration deployments
 ```
 
@@ -43,7 +46,18 @@ docker network create shared-db-network
 
 ---
 
-## 🗄️ Step 3: Shared Infrastructure Startup
+## 🐳 Step 3: Build Custom PHP 7.2 Base Image
+
+Before running the applications, compile the custom Debian 13 apt-based PHP 7.2 foundation image once into your local container image store:
+
+```bash
+cd /app/stacks/shared-services/base-images/php72-debian13
+docker compose build
+```
+
+---
+
+## 🗄️ Step 4: Shared Infrastructure Startup
 
 Navigate to the dedicated database orchestration folder and boot up the persistent engine daemon:
 
@@ -54,7 +68,7 @@ docker compose up -d
 
 ---
 
-## 🚀 Step 4: Traefik v3.7 Router Setup & Windows Trust Mapping
+## 🚀 Step 5: Traefik v3.7 Router Setup & Windows Trust Mapping
 
 Navigate to your shared proxy setup and spin up your target routing layer:
 
@@ -77,7 +91,7 @@ docker compose -f docker-compose-dev.yml up -d
 
 ---
 
-## 🏁 Step 5: Application Deployment & First-Time Launch
+## 🏁 Step 6: Application Deployment & First-Time Launch
 
 ### 🛠️ Initializing a New Target Workspace (e.g., Bengkel App)
 Run this compilation sequence when launching your Laravel container ecosystem for the first time:
@@ -86,14 +100,14 @@ Run this compilation sequence when launching your Laravel container ecosystem fo
 cd /app/stacks/laravel-apps/bengkel
 
 # Build and initiate the custom web core containers
-docker compose -f docker-compose-dev.yml up -d --build
+docker compose -f docker-compose-dev.yml up -d
 
 # Provision code dependencies swiftly inside the fast internal volume layout
 docker compose exec bengkel-app composer install
 ```
 
 ### 🔄 Managing Application Environments
-Pivot across your custom deployment strategies seamlessly by invoking their corresponding orchestration definitions:
+Pivot across your custom deployment strategies seamlessly by invoking their corresponding orchestration definitions. All environments utilize high-performance Unix Sockets running inside RAM:
 
 * **To boot up local Development (`*.test` domains + Trusted SSL):**
   ```bash
@@ -107,3 +121,9 @@ Pivot across your custom deployment strategies seamlessly by invoking their corr
   ```bash
   docker compose -f docker-compose-ip.yml up -d
   ```
+
+### 🛑 Container Teardown
+To safely stop application execution and cleanly wipe out the temporary in-memory socket allocations without losing persistent database files:
+```bash
+docker compose -f docker-compose-dev.yml down -v
+```
