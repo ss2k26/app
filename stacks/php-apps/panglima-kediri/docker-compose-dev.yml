@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  panglima-kediri-app:
+    image: local/php56-debian13:latest
+    container_name: panglima-kediri-core-dev
+    restart: always
+    volumes:
+      - /app/htdocs/panglima-kediri:/var/www/html
+      - php-socket-share:/var/run/php
+    networks:
+      - shared-db-network
+      - panglima-kediri-network-dev
+
+  panglima-kediri-web:
+    image: nginx:alpine
+    container_name: panglima-kediri-webserver-dev
+    restart: always
+    volumes:
+      - /app/htdocs/panglima-kediri:/var/www/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - php-socket-share:/var/run/php
+    networks:
+      - shared-db-network
+      - panglima-kediri-network-dev
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=shared-db-network"
+      - "traefik.http.routers.panglima-kediri-dev.rule=Host(`panglima-kediri.mysite.test`)"
+      - "traefik.http.routers.panglima-kediri-dev.entrypoints=websecure"
+      - "traefik.http.routers.panglima-kediri-dev.tls=true"
+      - "traefik.http.services.panglima-kediri-dev-service.loadbalancer.server.port=80"
+
+networks:
+  panglima-kediri-network-dev:
+  shared-db-network:
+    external: true
+    name: shared-db-network
+
+volumes:
+  php-socket-share:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs

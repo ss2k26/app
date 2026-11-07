@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  panglima-kediri-app:
+    image: local/php56-debian13:latest
+    container_name: panglima-kediri-core-prod
+    restart: always
+    volumes:
+      - /app/htdocs/panglima-kediri:/var/www/html
+      - php-socket-share:/var/run/php
+    networks:
+      - shared-db-network
+      - panglima-kediri-network-prod
+
+  panglima-kediri-web:
+    image: nginx:alpine
+    container_name: panglima-kediri-webserver-prod
+    restart: always
+    volumes:
+      - /app/htdocs/panglima-kediri:/var/www/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - php-socket-share:/var/run/php
+    networks:
+      - shared-db-network
+      - panglima-kediri-network-prod
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=shared-db-network"
+      - "traefik.http.routers.panglima-kediri-prod.rule=Host(`://yourfirm.com`)"  # <-- Replace with your actual live public domain name string
+      - "traefik.http.routers.panglima-kediri-prod.entrypoints=websecure"
+      - "traefik.http.routers.panglima-kediri-prod.tls=true"
+      # References the Let's Encrypt resolver block defined in your production proxy
+      - "traefik.http.routers.panglima-kediri-prod.tls.certresolver=myresolver"
+      - "traefik.http.services.panglima-kediri-prod-service.loadbalancer.server.port=80"
+
+networks:
+  panglima-kediri-network-prod:
+  shared-db-network:
+    external: true
+    name: shared-db-network
+
+volumes:
+  php-socket-share:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs

@@ -12,22 +12,26 @@ if (-not $ScriptFolder) { $ScriptFolder = $PSScriptRoot }
 
 $hostsPath = "$env:windir\System32\drivers\etc\hosts"
 
-# Resolve the target app directory layout path dynamically
+# Resolve the target app directory layout paths dynamically
 $laravelAppsPath = Join-Path $ScriptFolder "stacks\laravel-apps"
+$phpAppsPath = Join-Path $ScriptFolder "stacks\php-apps"
+$appsPaths = @($laravelAppsPath, $phpAppsPath)
 
 $targetDomains = [System.Collections.Generic.List[string]]::new()
 $targetDomains.Add("portainer.mysite.test")
 
-Write-Host "Scanning dynamic relative path: $laravelAppsPath" -ForegroundColor Cyan
+foreach ($appsPath in $appsPaths) {
+    Write-Host "Scanning dynamic relative path: $appsPath" -ForegroundColor Cyan
 
-if (Test-Path $laravelAppsPath) {
-    $apps = Get-ChildItem -Path $laravelAppsPath -Directory
-    foreach ($app in $apps) {
-        $appName = $app.Name.ToLower().Trim()
-        if ($appName) { $targetDomains.Add("$appName.mysite.test") }
+    if (Test-Path $appsPath) {
+        $apps = Get-ChildItem -Path $appsPath -Directory
+        foreach ($app in $apps) {
+            $appName = $app.Name.ToLower().Trim()
+            if ($appName) { $targetDomains.Add("$appName.mysite.test") }
+        }
+    } else {
+        Write-Host "Warning: Relative apps directory structure not found: $appsPath" -ForegroundColor Yellow
     }
-} else {
-    Write-Host "Warning: Relative apps directory structure not found!" -ForegroundColor Yellow
 }
 
 Write-Host "Processing local Windows hosts mappings..." -ForegroundColor Cyan

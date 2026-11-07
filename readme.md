@@ -56,6 +56,12 @@ cd /app/stacks/shared-services/base-images/php72-debian13
 docker compose build
 ```
 
+Jika ada perubahan pada `Dockerfile` atau konfigurasi base image, build ulang tanpa menggunakan cache:
+
+```bash
+docker compose build --no-cache
+```
+
 ---
 
 ## 🗄️ Step 4: Shared Infrastructure Startup
@@ -150,4 +156,3 @@ Execute the specific layout definition that matches your active proxy stack fram
   ```bash
   docker compose -f docker-compose-ip.yml up -d
   ```
-
