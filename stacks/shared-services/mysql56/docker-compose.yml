@@ -11,7 +11,9 @@ services:
     # Forward incoming local traffic to the shared localhost space on port 33060
     command: tcp-listen:3306,fork,reuseaddr tcp-connect:127.0.0.1:33060
     networks:
-      - shared-db-network
+      shared-db-network:
+        aliases:
+          - mysql56-shared
 
   mysql:
     image: mysql:5.6.43

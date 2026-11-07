@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     apt-transport-https \
     lsb-release \
+    git \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # 3. Securely hook in Ondřej Surý's Debian DPA using modern keyrings targeting trixie
