@@ -42,7 +42,7 @@ sudo ln -s /home/ubuntu/app /app
 Run the initial network mapping sequence. This creates a global network switch allowing isolated application containers to resolve your global proxies and shared databases:
 
 ```bash
-docker network create shared-db-network
+docker network create --subnet=172.18.0.0/16 shared-db-network
 ```
 
 ---
