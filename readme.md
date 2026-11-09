@@ -66,11 +66,27 @@ docker compose build --no-cache
 
 ## 🗄️ Step 4: Shared Infrastructure Startup
 
-Navigate to the dedicated database orchestration folder and boot up the persistent engine daemon:
+Choose one MySQL 5.6 profile. Development uses a low-memory configuration; production is capped at 2 GB and uses a larger InnoDB buffer pool:
 
+### 💻 Development
 ```bash
 cd /app/stacks/shared-services/mysql56
-docker compose up -d
+docker compose -f docker-compose-dev.yml up -d
+```
+
+### 🌐 Production (2 GB memory limit)
+```bash
+cd /app/stacks/shared-services/mysql56
+docker compose -f docker-compose-prod.yml up -d
+```
+
+Both profiles use the same persistent database directory (`/app/data/mysql56`) and container names. Stop the active profile before switching; do not run both profiles simultaneously. Config files are bind-mounted outside MySQL's config directory, then copied inside the container with mode `0644` before the official MySQL entrypoint starts. This avoids MySQL 5.6 ignoring world-writable config files when the stack is stored on a Windows drive and accessed through WSL.
+
+To stop a profile without removing the persistent database data:
+```bash
+docker compose -f docker-compose-dev.yml down
+# or
+docker compose -f docker-compose-prod.yml down
 ```
 
 ---
