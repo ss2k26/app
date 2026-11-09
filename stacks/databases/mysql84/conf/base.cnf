@@ -1,0 +1,7 @@
+[mysqld]
+bind-address=127.0.0.1
+port=13306
+mysqlx=OFF
+# MySQL 8.4 disables mysql_native_password by default; old PHP (5.6 / 7.2 / 7.3)
+# clients cannot use caching_sha2_password. Remove this line if you only run PHP >= 7.4.
+mysql_native_password=ON

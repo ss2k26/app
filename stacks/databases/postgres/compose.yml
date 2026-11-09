@@ -1,0 +1,56 @@
+# PostgreSQL 17 - host alias "postgres" (apps, port 5432), published port 5432 for remote PCs via socat.
+# Unlike MySQL, PostgreSQL does NOT use the shared-namespace trick: the official image trusts
+# 127.0.0.1 without a password, so tunnelling remote clients through localhost would give
+# them passwordless superuser access. Here socat connects over the network instead, so every
+# remote client still has to authenticate (scram-sha-256).
+name: postgres
+
+services:
+  db:
+    image: postgres:${POSTGRES_TAG:-17-alpine}
+    container_name: postgres-server
+    restart: unless-stopped
+    mem_limit: ${POSTGRES_MEM_LIMIT:-0}
+    shm_size: 256mb
+    environment:
+      TZ: ${TZ:-UTC}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the stack .env}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-128MB}
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-50}
+    volumes:
+      - ${APP_ROOT:-/app}/data/postgres17:/var/lib/postgresql/data
+    networks:
+      data:
+        aliases:
+          - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  proxy:
+    image: alpine/socat
+    container_name: postgres-proxy
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - tcp-listen:5432,fork,reuseaddr,max-children=${DB_MAX_CLIENTS:-200}
+      - tcp-connect:db:5432
+    ports:
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    networks:
+      - data
+
+networks:
+  data:
+    external: true
+    name: data

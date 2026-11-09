@@ -1,0 +1,52 @@
+# MariaDB 11.4 LTS - host alias "mariadb", published port 3308 (same socat pattern).
+name: mariadb
+
+services:
+  proxy:
+    image: alpine/socat
+    container_name: mariadb-proxy
+    restart: unless-stopped
+    command:
+      - tcp-listen:3306,fork,reuseaddr,max-children=${DB_MAX_CLIENTS:-200}
+      - tcp-connect:127.0.0.1:13306
+    ports:
+      - "${MARIADB_BIND:-127.0.0.1}:${MARIADB_PORT:-3308}:3306"
+    networks:
+      data:
+        aliases:
+          - mariadb
+
+  db:
+    image: mariadb:${MARIADB_TAG:-11.4}
+    container_name: mariadb-server
+    restart: unless-stopped
+    network_mode: "service:proxy"
+    depends_on:
+      - proxy
+    mem_limit: ${MARIADB_MEM_LIMIT:-0}
+    environment:
+      TZ: ${TZ:-UTC}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-}
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: ${MARIADB_ALLOW_EMPTY:-}
+    volumes:
+      - ${APP_ROOT:-/app}/data/mariadb:/var/lib/mysql
+      - ${APP_ROOT:-/app}/stacks/databases/mariadb/conf:/tmp/mysql-config:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        cp /tmp/mysql-config/base.cnf /etc/mysql/conf.d/00-base.cnf &&
+        cp /tmp/mysql-config/${MARIADB_CNF:-low-memory}.cnf /etc/mysql/conf.d/10-tuning.cnf &&
+        chmod 0644 /etc/mysql/conf.d/*.cnf &&
+        exec /usr/local/bin/docker-entrypoint.sh mariadbd
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h127.0.0.1 -P13306 --silent"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+networks:
+  data:
+    external: true
+    name: data

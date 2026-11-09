@@ -1,0 +1,42 @@
+# Rendered by the nginx image (envsubst) into /etc/nginx/conf.d/default.conf.
+# Variables: ${WEB_ROOT} ${PHP_SOCKET} ${CLIENT_MAX_BODY_SIZE}. nginx's own $variables are untouched.
+server {
+    listen 80;
+    index index.php index.html;
+    root ${WEB_ROOT};
+    client_max_body_size ${CLIENT_MAX_BODY_SIZE};
+
+    error_log  /var/log/nginx/error.log;
+    access_log /var/log/nginx/access.log;
+
+    # Real client IP from Traefik (any private docker network range)
+    real_ip_header X-Forwarded-For;
+    set_real_ip_from 10.0.0.0/8;
+    set_real_ip_from 172.16.0.0/12;
+    set_real_ip_from 192.168.0.0/16;
+    real_ip_recursive on;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+        gzip_static on;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:${PHP_SOCKET};
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+
+        # TLS is always terminated by Traefik -> tell the app it is on https
+        fastcgi_param HTTPS on;
+        fastcgi_param REQUEST_SCHEME https;
+        fastcgi_param SERVER_PORT $http_x_forwarded_port;
+        fastcgi_param HTTP_X_FORWARDED_PROTO $http_x_forwarded_proto;
+        fastcgi_param HTTP_X_FORWARDED_PORT $http_x_forwarded_port;
+    }
+
+    location ~ /\.(?!well-known) { deny all; }
+}

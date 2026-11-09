@@ -1,7 +1,0 @@
-version: '3.8'
-
-services:
-  base-builder:
-    build: .
-    image: local/php56-debian13:latest
-    container_name: base-php56-builder

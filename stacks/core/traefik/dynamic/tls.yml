@@ -1,0 +1,14 @@
+# Default certificate = what browsers get for *.mysite.test (dev) and for IP:port access (prod).
+# Domains that use certresolver=le get their own Let's Encrypt certificate via SNI.
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+  certificates:
+    - certFile: /certs/default.pem
+      keyFile: /certs/default-key.pem
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/default.pem
+        keyFile: /certs/default-key.pem

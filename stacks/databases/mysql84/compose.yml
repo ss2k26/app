@@ -1,0 +1,55 @@
+# MySQL 8.4 LTS - host alias "mysql84", published port 3307 (same socat pattern as mysql56).
+# mysqld listens on 127.0.0.1:13306 inside the shared namespace; the X plugin is OFF
+# (it would otherwise want 33060).
+name: mysql84
+
+services:
+  proxy:
+    image: alpine/socat
+    container_name: mysql84-proxy
+    restart: unless-stopped
+    command:
+      - tcp-listen:3306,fork,reuseaddr,max-children=${DB_MAX_CLIENTS:-200}
+      - tcp-connect:127.0.0.1:13306
+    ports:
+      - "${MYSQL84_BIND:-127.0.0.1}:${MYSQL84_PORT:-3307}:3306"
+    networks:
+      data:
+        aliases:
+          - mysql84
+
+  db:
+    image: mysql:${MYSQL84_TAG:-8.4}
+    container_name: mysql84-server
+    restart: unless-stopped
+    network_mode: "service:proxy"
+    depends_on:
+      - proxy
+    mem_limit: ${MYSQL84_MEM_LIMIT:-0}
+    environment:
+      TZ: ${TZ:-UTC}
+      MYSQL_TCP_PORT: "13306"
+      MYSQL_ROOT_PASSWORD: ${MYSQL84_ROOT_PASSWORD:-}
+      MYSQL_ALLOW_EMPTY_PASSWORD: ${MYSQL84_ALLOW_EMPTY:-}
+    volumes:
+      - ${APP_ROOT:-/app}/data/mysql84:/var/lib/mysql
+      - ${APP_ROOT:-/app}/stacks/databases/mysql84/conf:/tmp/mysql-config:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        cp /tmp/mysql-config/base.cnf /etc/mysql/conf.d/00-base.cnf &&
+        cp /tmp/mysql-config/${MYSQL84_CNF:-low-memory}.cnf /etc/mysql/conf.d/10-tuning.cnf &&
+        chmod 0644 /etc/mysql/conf.d/*.cnf &&
+        exec /entrypoint.sh mysqld
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -P13306 --silent"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+networks:
+  data:
+    external: true
+    name: data

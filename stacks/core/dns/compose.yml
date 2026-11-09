@@ -1,0 +1,17 @@
+# DEV ONLY - wildcard DNS so *.mysite.test always resolves to 127.0.0.1.
+# Needs a one-time Windows rule: windows/2-setup-dns.bat   (see docs/windows-dev.md)
+# Fallback when UDP/53 is not reachable from Windows: windows/3-update-hosts.bat
+name: dns
+
+services:
+  dnsmasq:
+    image: alpine:3
+    container_name: dev-dns
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:53:53/udp"
+      - "127.0.0.1:53:53/tcp"
+    command:
+      - sh
+      - -c
+      - apk add --no-cache dnsmasq >/dev/null && exec dnsmasq --keep-in-foreground --no-resolv --no-hosts --log-facility=- --address=/${DEV_DOMAIN:-mysite.test}/127.0.0.1

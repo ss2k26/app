@@ -1,0 +1,96 @@
+# Traefik v3 edge router - ONE file for dev and prod. Behaviour is driven by .env
+#   dev  : COMPOSE env = .env.dev.example   (mkcert wildcard cert for *.mysite.test)
+#   prod : COMPOSE env = .env.prod.example  (Let's Encrypt + IP:port with private-CA cert)
+# Absolute ${APP_ROOT} paths are used on purpose so the same file works from the
+# CLI *and* when pasted into a Portainer stack.
+name: traefik
+
+services:
+  # One-shot: creates /app/certs/default.pem (+ local CA) if missing/changed/old.
+  certs:
+    image: alpine/mkcert:latest
+    restart: "no"
+    entrypoint: ["/bin/sh", "/gen-certs.sh"]
+    environment:
+      CERT_NAMES: ${CERT_NAMES:-mysite.test,*.mysite.test,localhost,127.0.0.1,::1}
+      CERT_FORCE: ${CERT_FORCE:-0}
+    volumes:
+      - ${APP_ROOT:-/app}/certs:/certs
+      - ${APP_ROOT:-/app}/stacks/core/traefik/scripts/gen-certs.sh:/gen-certs.sh:ro
+
+  traefik:
+    image: traefik:${TRAEFIK_TAG:-v3.7}
+    container_name: traefik
+    restart: unless-stopped
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      # dashboard + ping on :8080, published on loopback only (see ports)
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --ping=true
+      # providers
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=edge
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      # entrypoints: 80 -> 443 redirect, 443 for domains / *.mysite.test
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls=true
+      # entrypoints: pre-declared IP:port pool (an app picks one via APP_IP_EP=ip-84xx)
+      - --entrypoints.ip-8443.address=:8443
+      - --entrypoints.ip-8443.http.tls=true
+      - --entrypoints.ip-8444.address=:8444
+      - --entrypoints.ip-8444.http.tls=true
+      - --entrypoints.ip-8445.address=:8445
+      - --entrypoints.ip-8445.http.tls=true
+      - --entrypoints.ip-8446.address=:8446
+      - --entrypoints.ip-8446.http.tls=true
+      - --entrypoints.ip-8447.address=:8447
+      - --entrypoints.ip-8447.http.tls=true
+      - --entrypoints.ip-8448.address=:8448
+      - --entrypoints.ip-8448.http.tls=true
+      - --entrypoints.ip-8449.address=:8449
+      - --entrypoints.ip-8449.http.tls=true
+      - --entrypoints.ip-8450.address=:8450
+      - --entrypoints.ip-8450.http.tls=true
+      # Let's Encrypt (only used by routers that set tls.certresolver=le)
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.caserver=${ACME_CASERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+    ports:
+      - "${TRAEFIK_BIND:-0.0.0.0}:80:80"
+      - "${TRAEFIK_BIND:-0.0.0.0}:443:443"
+      # IP:port pool. Dev keeps it on loopback, prod sets TRAEFIK_IP_BIND=0.0.0.0
+      - "${TRAEFIK_IP_BIND:-127.0.0.1}:8443-8450:8443-8450"
+      # dashboard: loopback only -> http://localhost:8080 (use an SSH tunnel on a VPS)
+      - "${TRAEFIK_DASHBOARD_BIND:-127.0.0.1}:${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${APP_ROOT:-/app}/stacks/core/traefik/dynamic:/etc/traefik/dynamic:ro
+      - ${APP_ROOT:-/app}/certs:/certs:ro
+      - ${APP_ROOT:-/app}/data/traefik/letsencrypt:/letsencrypt
+    networks:
+      - edge
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  edge:
+    external: true
+    name: edge

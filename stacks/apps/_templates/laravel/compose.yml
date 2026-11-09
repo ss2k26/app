@@ -1,0 +1,70 @@
+# App stack template - identical for every app, only the stack .env differs.
+# Routing is driven by variables; unused modes stay on the never-matching host "disabled.invalid":
+#   dev    : APP_HOST_DEV                       -> https://<app>.mysite.test   (mkcert cert)
+#   domain : APP_HOST_PROD (+ACME_RESOLVER=le)  -> https://yourdomain.com      (Let's Encrypt)
+#   ip     : APP_IP_HOST + APP_IP_EP            -> https://<ip>:84xx           (private-CA cert)
+# Enable one, two or all three at the same time.
+name: ${APP_NAME:?APP_NAME is required}
+
+services:
+  php:
+    image: local/php:${PHP_VERSION:-7.2}
+    restart: unless-stopped
+    working_dir: /var/www/html
+    environment:
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ${APP_ROOT:-/app}/htdocs/${APP_NAME}:/var/www/html
+      - vendor:/var/www/html/vendor
+      - php-socket:/var/run/php
+    networks:
+      - data            # reach databases: mysql56 / mysql84 / mariadb / postgres
+
+  web:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - php
+    environment:
+      WEB_ROOT: /var/www/html/public
+      PHP_SOCKET: /var/run/php/php${PHP_VERSION:-7.2}-fpm.sock
+      CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-64m}
+    volumes:
+      - ${APP_ROOT:-/app}/htdocs/${APP_NAME}:/var/www/html:ro
+      - ${APP_ROOT:-/app}/stacks/apps/_shared/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - php-socket:/var/run/php
+    networks:
+      - edge            # only the web container is reachable by Traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=edge"
+      - "traefik.http.services.${APP_NAME}.loadbalancer.server.port=80"
+      # A) dev
+      - "traefik.http.routers.${APP_NAME}-dev.rule=Host(`${APP_HOST_DEV:-disabled.invalid}`)"
+      - "traefik.http.routers.${APP_NAME}-dev.entrypoints=websecure"
+      - "traefik.http.routers.${APP_NAME}-dev.tls=true"
+      # B) public domain (+ optional second host, e.g. www)
+      - "traefik.http.routers.${APP_NAME}-prod.rule=Host(`${APP_HOST_PROD:-disabled.invalid}`) || Host(`${APP_HOST_PROD_ALT:-${APP_HOST_PROD:-disabled.invalid}}`)"
+      - "traefik.http.routers.${APP_NAME}-prod.entrypoints=websecure"
+      - "traefik.http.routers.${APP_NAME}-prod.tls=true"
+      - "traefik.http.routers.${APP_NAME}-prod.tls.certresolver=${ACME_RESOLVER:-}"
+      # C) server IP + custom port
+      - "traefik.http.routers.${APP_NAME}-ip.rule=Host(`${APP_IP_HOST:-disabled.invalid}`)"
+      - "traefik.http.routers.${APP_NAME}-ip.entrypoints=${APP_IP_EP:-websecure}"
+      - "traefik.http.routers.${APP_NAME}-ip.tls=true"
+
+networks:
+  edge:
+    external: true
+    name: edge
+  data:
+    external: true
+    name: data
+
+volumes:
+  php-socket:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+  vendor:

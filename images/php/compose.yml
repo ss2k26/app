@@ -1,0 +1,27 @@
+# Build the shared PHP images once:   bin/platform build           (all)
+#                                      bin/platform build php72     (one)
+# Result: local/php:5.6  local/php:7.2  local/php:7.4  local/php:8.3
+# Add a version = copy a block, change the numbers.
+name: php-images
+
+services:
+  php56:
+    image: local/php:5.6
+    build:
+      context: .
+      args: { PHP_VERSION: "5.6", COMPOSER_TAG: "1.10.26" }
+  php72:
+    image: local/php:7.2
+    build:
+      context: .
+      args: { PHP_VERSION: "7.2", COMPOSER_TAG: "2.2", WITH_WKHTMLTOPDF: "true" }
+  php74:
+    image: local/php:7.4
+    build:
+      context: .
+      args: { PHP_VERSION: "7.4", COMPOSER_TAG: "2" }
+  php83:
+    image: local/php:8.3
+    build:
+      context: .
+      args: { PHP_VERSION: "8.3", COMPOSER_TAG: "2" }

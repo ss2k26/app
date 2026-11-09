@@ -1,0 +1,237 @@
+#!/usr/bin/env bash
+# platform - thin wrapper around `docker compose` for the stacks in ./stacks.
+# Everything it does is plain docker compose; run `platform dc <stack> config` to see exactly what.
+set -euo pipefail
+
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+REAL_ROOT="$(dirname "$SELF_DIR")"
+# Prefer the /app anchor (symlink) so paths match what Portainer-created stacks use.
+if [ -d /app ] && [ "$(cd /app && pwd -P)" = "$REAL_ROOT" ]; then ROOT=/app; else ROOT="$REAL_ROOT"; fi
+export APP_ROOT="$ROOT"
+STACKS="$ROOT/stacks"
+GLOBAL_ENV="$ROOT/.env"
+NETWORKS=(edge data)
+
+c_red=$'\e[31m'; c_grn=$'\e[32m'; c_ylw=$'\e[33m'; c_dim=$'\e[2m'; c_off=$'\e[0m'
+die()  { echo "${c_red}error:${c_off} $*" >&2; exit 1; }
+info() { echo "${c_grn}==>${c_off} $*"; }
+warn() { echo "${c_ylw}warn:${c_off} $*" >&2; }
+
+# value of KEY in the global .env (default if missing)
+genv() { local v=""; [ -f "$GLOBAL_ENV" ] && v="$(grep -E "^$1=" "$GLOBAL_ENV" | tail -1 | cut -d= -f2- || true)"; echo "${v:-${2:-}}"; }
+mode() { genv PLATFORM_ENV dev; }
+
+# ---------------------------------------------------------------- stack resolution
+resolve_stack() {            # name | group/name  ->  absolute dir
+  local n="$1" d
+  if [[ "$n" == */* ]]; then d="$STACKS/$n"; [ -f "$d/compose.yml" ] || die "no stack '$n'"; echo "$d"; return; fi
+  local found=()
+  for d in "$STACKS"/*/"$n"; do [ -f "$d/compose.yml" ] && [[ "$d" != */_* ]] && found+=("$d"); done
+  [ "${#found[@]}" -eq 1 ] || die "stack '$n' $([ "${#found[@]}" -eq 0 ] && echo 'not found' || echo 'is ambiguous, use group/name') (try: platform list)"
+  echo "${found[0]}"
+}
+
+# builds the global DC array for a stack dir
+DC=()
+dc_for() {
+  local d="$1" envf="$1/.env" ex
+  DC=(docker compose --project-directory "$d")
+  [ -f "$GLOBAL_ENV" ] && DC+=(--env-file "$GLOBAL_ENV")
+  if [ ! -f "$envf" ]; then
+    ex="$d/.env.$(mode).example"
+    if [ -f "$ex" ]; then warn "$(basename "$d"): no .env, using $(basename "$ex") (run: platform init)"; envf="$ex"; else envf=""; fi
+  fi
+  [ -n "$envf" ] && DC+=(--env-file "$envf")
+  DC+=(-f "$d/compose.yml")
+}
+
+run_dc() { local d="$1"; shift; dc_for "$d"; "${DC[@]}" "$@"; }
+
+split_args() {               # sets STACK_ARGS (before --) and EXTRA (after --)
+  STACK_ARGS=(); EXTRA=()
+  local seen=0 a
+  for a in "$@"; do
+    if [ "$a" = "--" ] && [ $seen -eq 0 ]; then seen=1; continue; fi
+    if [ $seen -eq 1 ]; then EXTRA+=("$a"); else STACK_ARGS+=("$a"); fi
+  done
+}
+
+default_stacks() { local s; IFS=',' read -ra s <<<"$(genv PLATFORM_STACKS traefik,portainer)"; printf '%s\n' "${s[@]}"; }
+
+# ---------------------------------------------------------------- commands
+cmd_init() {
+  local m="${1:-$(mode)}"
+  [[ "$m" == dev || "$m" == prod ]] || die "usage: platform init [dev|prod]"
+  command -v docker >/dev/null || die "docker not found"
+  [ -f "$GLOBAL_ENV" ] || { sed "s/^PLATFORM_ENV=.*/PLATFORM_ENV=$m/" "$ROOT/.env.example" > "$GLOBAL_ENV"; info "created .env (PLATFORM_ENV=$m)"; }
+  for n in "${NETWORKS[@]}"; do
+    docker network inspect "$n" >/dev/null 2>&1 || { docker network create "$n" >/dev/null && info "network '$n' created"; }
+  done
+  mkdir -p "$ROOT"/{htdocs,certs} "$ROOT"/data/{traefik/letsencrypt,portainer,mysql56,mysql84,mariadb,postgres17}
+  local d
+  for d in "$STACKS"/*/*/; do
+    d="${d%/}"; [[ "$d" == */_* ]] && continue; [ -f "$d/compose.yml" ] || continue
+    if [ ! -f "$d/.env" ] && [ -f "$d/.env.$m.example" ]; then cp "$d/.env.$m.example" "$d/.env"; info "$(basename "$d")/.env <- .env.$m.example"; fi
+  done
+  echo
+  info "ready ($m). Next:"
+  echo "   1. edit stacks/*/*/.env (passwords, domains, IP)"
+  echo "   2. platform build              # PHP images"
+  echo "   3. platform up                 # $(genv PLATFORM_STACKS)"
+  [ "$m" = dev ] && echo "   4. Windows: run windows\\1-install-cert.bat and windows\\3-update-hosts.bat (or 2-setup-dns.bat)"
+  return 0
+}
+
+cmd_build() {
+  if [ "$#" -eq 0 ]; then docker compose -f "$ROOT/images/php/compose.yml" build
+  else docker compose -f "$ROOT/images/php/compose.yml" build "$@"; fi
+}
+
+each_stack() {               # each_stack <docker compose args...>   (uses STACK_ARGS / defaults)
+  local names=("${STACK_ARGS[@]}") n d
+  [ "${#names[@]}" -gt 0 ] || mapfile -t names < <(default_stacks)
+  for n in "${names[@]}"; do d="$(resolve_stack "$n")"; info "$(basename "$d"): $*"; run_dc "$d" "$@" "${EXTRA[@]}"; done
+}
+
+cmd_up()      { split_args "$@"; each_stack up -d; }
+cmd_pull()    { split_args "$@"; each_stack pull; }
+cmd_ps()      { split_args "$@"; each_stack ps; }
+cmd_restart() { split_args "$@"; each_stack restart; }
+cmd_down() {
+  split_args "$@"
+  local names=("${STACK_ARGS[@]}") i
+  if [ "${#names[@]}" -eq 0 ]; then mapfile -t names < <(default_stacks | tac); fi
+  for n in "${names[@]}"; do d="$(resolve_stack "$n")"; info "$(basename "$d"): down"; run_dc "$d" down "${EXTRA[@]}"; done
+}
+cmd_config()  { [ $# -ge 1 ] || die "usage: platform config <stack>"; run_dc "$(resolve_stack "$1")" config; }
+cmd_logs()    { [ $# -ge 1 ] || die "usage: platform logs <stack> [service]"; local s="$1"; shift; run_dc "$(resolve_stack "$s")" logs -f --tail=100 "$@"; }
+cmd_dc()      { [ $# -ge 2 ] || die "usage: platform dc <stack> <docker compose args...>"; local s="$1"; shift; run_dc "$(resolve_stack "$s")" "$@"; }
+cmd_exec()    { [ $# -ge 3 ] || die "usage: platform exec <stack> <service> <cmd...>"; local s="$1" sv="$2"; shift 2; run_dc "$(resolve_stack "$s")" exec "$sv" "$@"; }
+cmd_sh()      { [ $# -ge 1 ] || die "usage: platform sh <stack> [service]"; local s="$1" sv="${2:-php}"; run_dc "$(resolve_stack "$s")" exec "$sv" bash 2>/dev/null || run_dc "$(resolve_stack "$s")" exec "$sv" sh; }
+
+cmd_status() {
+  docker compose ls -a
+  echo
+  docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+}
+
+cmd_list() {
+  local d g
+  for g in "$STACKS"/*/; do
+    echo "${c_dim}$(basename "$g")/${c_off}"
+    for d in "$g"*/; do d="${d%/}"; [[ "$d" == */_* ]] && continue; [ -f "$d/compose.yml" ] && echo "   $(basename "$d")"; done
+  done
+}
+
+cmd_certs() {
+  local force=0; [ "${1:-}" = "--force" ] && force=1
+  local d; d="$(resolve_stack traefik)"
+  info "generating certificates (force=$force)"
+  CERT_FORCE=$force run_dc "$d" run --rm certs
+  if docker ps --format '{{.Names}}' | grep -qx traefik; then info "restarting traefik to load the certificate"; run_dc "$d" restart traefik; fi
+  info "client trust file: $ROOT/certs/rootCA.crt   (Windows: windows\\1-install-cert.bat)"
+}
+
+cmd_new_app() {
+  local name="${1:-}" type="${2:-laravel}" ver="${3:-7.2}"
+  [[ "$name" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "usage: platform new-app <name> [laravel|php] [php-version]   (name: a-z 0-9 -)"
+  [ -d "$STACKS/apps/_templates/$type" ] || die "unknown type '$type' (laravel|php)"
+  local d="$STACKS/apps/$name"; [ ! -e "$d" ] || die "$d already exists"
+  mkdir -p "$d" "$ROOT/htdocs/$name"
+  cp "$STACKS/apps/_templates/$type/compose.yml" "$d/compose.yml"
+  # next free IP:port entrypoint (8443 is Portainer's)
+  local p ep=""
+  for p in 8444 8445 8446 8447 8448 8449 8450; do
+    grep -qsh "^APP_IP_EP=ip-$p" "$STACKS"/apps/*/.env.*example 2>/dev/null || { ep="ip-$p"; break; }
+  done
+  [ -n "$ep" ] || { ep="ip-8450"; warn "all pre-declared IP ports (8444-8450) are used; see docs/production.md to add more"; }
+  cat > "$d/.env.dev.example" <<EOF
+APP_NAME=$name
+APP_ROOT=/app
+PHP_VERSION=$ver
+TZ=Asia/Jakarta
+CLIENT_MAX_BODY_SIZE=64m
+# dev: https://$name.mysite.test
+APP_HOST_DEV=$name.mysite.test
+EOF
+  cat > "$d/.env.prod.example" <<EOF
+APP_NAME=$name
+APP_ROOT=/app
+PHP_VERSION=$ver
+TZ=Asia/Jakarta
+CLIENT_MAX_BODY_SIZE=64m
+# --- A) public domain + Let's Encrypt (delete these 3 lines to disable) ---
+APP_HOST_PROD=$name.yourdomain.com
+# APP_HOST_PROD_ALT=www.$name.yourdomain.com
+ACME_RESOLVER=le
+# --- B) server IP + custom port, private-CA cert (delete these 2 lines to disable) ---
+APP_IP_HOST=203.0.113.10
+APP_IP_EP=$ep
+EOF
+  info "created stacks/apps/$name  ($type, PHP $ver, IP entrypoint $ep)"
+  echo "   put the code in htdocs/$name, then:  platform init && platform up $name"
+  echo "   DB host inside the app: mysql56 | mysql84 | mariadb | postgres"
+}
+
+cmd_portainer_import() {
+  [ $# -ge 1 ] || die "usage: platform portainer-import <stack>"
+  local d name tok url eid envf; d="$(resolve_stack "$1")"; name="$(basename "$d")"
+  tok="$(genv PORTAINER_TOKEN)"; url="$(genv PORTAINER_URL https://127.0.0.1:9443)"; eid="$(genv PORTAINER_ENDPOINT_ID 1)"
+  [ -n "$tok" ] || die "set PORTAINER_TOKEN in .env (Portainer: My account -> Access tokens)"
+  envf="$d/.env"; [ -f "$envf" ] || envf="/dev/null"
+  command -v python3 >/dev/null || die "python3 needed"
+  local payload; payload="$(mktemp)"
+  python3 -I - "$d/compose.yml" "$envf" "$name" > "$payload" <<'PY'
+import json, sys
+compose, envf, name = sys.argv[1:4]
+env = []
+for line in open(envf, encoding="utf-8"):
+    line = line.strip()
+    if not line or line.startswith("#") or "=" not in line: continue
+    k, v = line.split("=", 1)
+    env.append({"name": k.strip(), "value": v.strip()})
+print(json.dumps({"name": name, "stackFileContent": open(compose, encoding="utf-8").read(), "env": env}))
+PY
+  info "importing '$name' into Portainer ($url, endpoint $eid)"
+  curl -sk -X POST "$url/api/stacks/create/standalone/string?endpointId=$eid" \
+       -H "X-API-Key: $tok" -H 'Content-Type: application/json' --data @"$payload" | head -c 600; echo
+  rm -f "$payload"
+}
+
+usage() {
+cat <<EOF
+platform - manage the container platform  (root: $ROOT, mode: $(mode))
+
+  init [dev|prod]              networks, data dirs, .env files from examples
+  build [php56|php72|...]      build shared PHP images (local/php:<ver>)
+  up|down|restart|pull|ps [stack...] [-- extra docker compose args]
+                               no stack = PLATFORM_STACKS from .env (down = reverse order)
+  logs <stack> [service]       follow logs
+  exec <stack> <service> <cmd> run a command in a service         e.g. exec bengkel php composer install
+  sh <stack> [service]         shell (default service: php)
+  dc <stack> <args...>         raw docker compose for that stack   e.g. dc bengkel run --rm php php artisan migrate
+  config <stack>               rendered compose (after env substitution)
+  certs [--force]              (re)generate the Traefik certificate and reload Traefik
+  new-app <name> [laravel|php] [php-version]
+  list | status
+  portainer-import <stack>     (experimental) create the stack in Portainer from its file via the API
+EOF
+}
+
+main() {
+  local c="${1:-help}"; [ $# -gt 0 ] && shift
+  case "$c" in
+    init) cmd_init "$@";;           build) cmd_build "$@";;
+    up) cmd_up "$@";;               down) cmd_down "$@";;
+    restart) cmd_restart "$@";;     pull) cmd_pull "$@";;
+    ps) cmd_ps "$@";;               logs) cmd_logs "$@";;
+    exec) cmd_exec "$@";;           sh|shell) cmd_sh "$@";;
+    dc) cmd_dc "$@";;               config) cmd_config "$@";;
+    certs) cmd_certs "$@";;         new-app) cmd_new_app "$@";;
+    list) cmd_list;;                status) cmd_status;;
+    portainer-import) cmd_portainer_import "$@";;
+    help|-h|--help) usage;;
+    *) usage; exit 1;;
+  esac
+}
+main "$@"

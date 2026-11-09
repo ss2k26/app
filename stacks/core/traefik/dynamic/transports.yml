@@ -1,0 +1,6 @@
+# Used by backends that only speak HTTPS with their own self-signed cert (Portainer :9443).
+# Traffic never leaves the private "edge" docker network.
+http:
+  serversTransports:
+    insecure:
+      insecureSkipVerify: true

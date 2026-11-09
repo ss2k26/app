@@ -1,4 +1,15 @@
-data
-htdocs
+# runtime state
+/data/*
+/htdocs/*
+/certs/*
+!/data/.gitkeep
+!/htdocs/.gitkeep
+!/certs/.gitkeep
+
+# real env files hold secrets -> only *.example are committed
+.env
+stacks/**/.env
 *.pem
 *.crt
+*.key
+acme.json

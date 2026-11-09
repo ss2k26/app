@@ -1,0 +1,64 @@
+# MySQL 5.6 (legacy) - host alias "mysql56" (+ "mysql56-shared" kept for old apps), port 3306.
+#
+# Why socat?  root may only connect from 127.0.0.1. The socat container owns the network
+# namespace, mysqld joins it (network_mode) and listens on 127.0.0.1:33060. Every client
+# (other containers, or a remote PC) talks to socat :3306, which re-connects to
+# 127.0.0.1:33060 -> mysqld sees the connection as coming from localhost.
+#   remote PC -> VPS:3306 -> socat -> 127.0.0.1:33060 (mysqld)
+name: mysql56
+
+services:
+  proxy:
+    image: alpine/socat
+    container_name: mysql56-proxy
+    restart: unless-stopped
+    command:
+      - tcp-listen:3306,fork,reuseaddr,max-children=${DB_MAX_CLIENTS:-200}
+      - tcp-connect:127.0.0.1:33060
+    ports:
+      # 127.0.0.1 = this machine only (use SSH tunnel). 0.0.0.0 = remote PCs (read docs/databases.md!)
+      - "${MYSQL56_BIND:-127.0.0.1}:${MYSQL56_PORT:-3306}:3306"
+    networks:
+      data:
+        aliases:
+          - mysql56
+          - mysql56-shared
+
+  db:
+    image: mysql:${MYSQL56_TAG:-5.6.43}
+    container_name: mysql56-server
+    restart: unless-stopped
+    network_mode: "service:proxy"
+    depends_on:
+      - proxy
+    mem_limit: ${MYSQL56_MEM_LIMIT:-0}
+    environment:
+      TZ: ${TZ:-UTC}
+      MYSQL_TCP_PORT: "33060"
+      # Only read when the data dir is empty (first start). Empty value = not set.
+      MYSQL_ROOT_PASSWORD: ${MYSQL56_ROOT_PASSWORD:-}
+      MYSQL_ALLOW_EMPTY_PASSWORD: ${MYSQL56_ALLOW_EMPTY:-}
+    volumes:
+      - ${APP_ROOT:-/app}/data/mysql56:/var/lib/mysql
+      # mounted outside conf.d and copied with mode 0644: MySQL ignores world-writable
+      # config files, which is what a Windows drive looks like from WSL.
+      - ${APP_ROOT:-/app}/stacks/databases/mysql56/conf:/tmp/mysql-config:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        cp /tmp/mysql-config/base.cnf /etc/mysql/conf.d/00-base.cnf &&
+        cp /tmp/mysql-config/${MYSQL56_CNF:-low-memory}.cnf /etc/mysql/conf.d/10-tuning.cnf &&
+        chmod 0644 /etc/mysql/conf.d/*.cnf &&
+        exec /entrypoint.sh mysqld
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -P33060 --silent"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+networks:
+  data:
+    external: true
+    name: data
