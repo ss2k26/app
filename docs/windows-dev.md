@@ -37,6 +37,9 @@ block in `C:\Windows\System32\drivers\etc\hosts`. Re-run after `new-app`. (A hos
 `https://portainer.mysite.test` (set `PORTAINER_HOST_DEV` in `stacks/core/portainer/.env`), `https://bengkel.mysite.test`.
 Traefik dashboard: `http://localhost:8080`.
 
+## MySQL installed on this PC (or on a VPS) from the Docker apps
+MySQL on Windows: `windows\6-wsl-mysql-bridge-start.bat` then `bin/platform up remote` (apps use `DB_HOST=windows-mysql`, root works). VPS databases: `windows\4-remote-db-start.bat` or the same stack. See [remote-db.md](remote-db.md).
+
 ## Databases from Windows tools (HeidiSQL, DBeaver)
 `127.0.0.1:3306` (mysql56), `:3307` (mysql84), `:3308` (mariadb), `:5432` (postgres), user `root` / `postgres`.
 

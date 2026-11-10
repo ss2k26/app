@@ -1,0 +1,124 @@
+# DEV: use a database that lives somewhere else as if it were local.
+#
+# A) profile "windows": MySQL installed on the Windows 10 host, apps in Docker inside WSL2
+#      app container -> windows-mysql:3309 (docker host gateway) -> [this stack, host netns]
+#        -> Windows IP:13306 -> netsh portproxy (windows/wsl-mysql-bridge.ps1) -> 127.0.0.1:3306
+#      MySQL sees the connection as coming from 127.0.0.1, so root@localhost works.
+#
+# B) profiles mysql56 / mysql84 / mariadb / postgres: the databases of a VPS (stacks/databases/*)
+#      app / HeidiSQL ──> 127.0.0.1:3306 (this PC) ──ssh tunnel or direct TCP──> VPS ──> socat ──> mysqld
+#
+# Pick what to start in COMPOSE_PROFILES (.env): windows,mysql56,mysql84,mariadb,postgres
+# Inside Docker the forwarder is reachable as  remote-<engine>  (or any alias you set, e.g. mysql56 to
+# make apps use the remote DB without changing DB_HOST - stop the local stack of that engine first).
+# Windows without Docker: see windows/remote-db.ps1 and docs/remote-db.md.
+name: remote-db
+
+x-forwarder: &forwarder
+  build:
+    context: ${APP_ROOT:-/app}/stacks/databases/remote
+  image: local/db-forwarder:latest
+  restart: unless-stopped
+  volumes:
+    - ${APP_ROOT:-/app}/data/ssh:/ssh:ro        # your private key (never committed: /data is git-ignored)
+    - ssh-state:/root/.ssh                       # known_hosts survives restarts
+  healthcheck:
+    test: ["CMD-SHELL", "netstat -ltn | grep -q \":$${LISTEN_PORT} \""]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 10s
+
+x-link: &link
+  REMOTE_MODE: ${REMOTE_MODE:-ssh}
+  REMOTE_HOST: ${REMOTE_HOST:-}
+  REMOTE_SSH_USER: ${REMOTE_SSH_USER:-}
+  REMOTE_SSH_PORT: ${REMOTE_SSH_PORT:-22}
+  REMOTE_SSH_KEY: ${REMOTE_SSH_KEY:-id_ed25519}
+  REMOTE_SSH_TARGET_HOST: ${REMOTE_SSH_TARGET_HOST:-127.0.0.1}
+
+services:
+  # MySQL on the Windows host. Host network namespace on purpose: from there the default route
+  # is the Windows host (WSL2 NAT), so the IP is detected at every start. Needs Docker engine inside WSL.
+  windows:
+    <<: *forwarder
+    profiles: [windows]
+    container_name: remote-windows
+    network_mode: host
+    environment:
+      REMOTE_MODE: ${WINDOWS_MODE:-direct}
+      REMOTE_HOST: ${WINDOWS_HOST:-windows}
+      REMOTE_SSH_USER: ${WINDOWS_SSH_USER:-}
+      REMOTE_SSH_PORT: ${WINDOWS_SSH_PORT:-22}
+      REMOTE_SSH_KEY: ${WINDOWS_SSH_KEY:-id_ed25519}
+      REMOTE_SSH_TARGET_HOST: 127.0.0.1
+      LISTEN_PORT: ${WINDOWS_LOCAL_PORT:-3309}
+      REMOTE_PORT: ${WINDOWS_PORT:-13306}
+
+  mysql56:
+    <<: *forwarder
+    profiles: [mysql56]
+    container_name: remote-mysql56
+    environment:
+      <<: *link
+      LISTEN_PORT: "3306"
+      REMOTE_PORT: ${REMOTE_MYSQL56_PORT:-3306}
+    ports:
+      - "${REMOTE_BIND:-127.0.0.1}:${REMOTE_MYSQL56_LOCAL_PORT:-3306}:3306"
+    networks:
+      data:
+        aliases:
+          - ${REMOTE_MYSQL56_ALIAS:-remote-mysql56}
+
+  mysql84:
+    <<: *forwarder
+    profiles: [mysql84]
+    container_name: remote-mysql84
+    environment:
+      <<: *link
+      LISTEN_PORT: "3306"
+      REMOTE_PORT: ${REMOTE_MYSQL84_PORT:-3307}
+    ports:
+      - "${REMOTE_BIND:-127.0.0.1}:${REMOTE_MYSQL84_LOCAL_PORT:-3307}:3306"
+    networks:
+      data:
+        aliases:
+          - ${REMOTE_MYSQL84_ALIAS:-remote-mysql84}
+
+  mariadb:
+    <<: *forwarder
+    profiles: [mariadb]
+    container_name: remote-mariadb
+    environment:
+      <<: *link
+      LISTEN_PORT: "3306"
+      REMOTE_PORT: ${REMOTE_MARIADB_PORT:-3308}
+    ports:
+      - "${REMOTE_BIND:-127.0.0.1}:${REMOTE_MARIADB_LOCAL_PORT:-3308}:3306"
+    networks:
+      data:
+        aliases:
+          - ${REMOTE_MARIADB_ALIAS:-remote-mariadb}
+
+  postgres:
+    <<: *forwarder
+    profiles: [postgres]
+    container_name: remote-postgres
+    environment:
+      <<: *link
+      LISTEN_PORT: "5432"
+      REMOTE_PORT: ${REMOTE_POSTGRES_PORT:-5432}
+    ports:
+      - "${REMOTE_BIND:-127.0.0.1}:${REMOTE_POSTGRES_LOCAL_PORT:-5432}:5432"
+    networks:
+      data:
+        aliases:
+          - ${REMOTE_POSTGRES_ALIAS:-remote-postgres}
+
+networks:
+  data:
+    external: true
+    name: data
+
+volumes:
+  ssh-state:

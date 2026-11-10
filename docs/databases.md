@@ -43,6 +43,8 @@ Remote clients must authenticate (scram-sha-256).
    (Persist it with `iptables-persistent`/your provider's cloud firewall. Adapt interface and port; test from another network.)
    Do not try to allow-list inside socat: your own apps reach the database through socat too.
 
+From a dev PC the same VPS databases are reachable as `root@127.0.0.1` through a tunnel or direct link: see [remote-db.md](remote-db.md).
+
 ## Per-app users (recommended instead of root)
 ```bash
 bin/platform exec mysql56 db mysql -uroot -p -e "CREATE DATABASE bengkel; CREATE USER 'bengkel'@'%' IDENTIFIED BY 'secret'; GRANT ALL ON bengkel.* TO 'bengkel'@'%'; FLUSH PRIVILEGES;"

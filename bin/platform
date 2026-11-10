@@ -67,7 +67,7 @@ cmd_init() {
   for n in "${NETWORKS[@]}"; do
     docker network inspect "$n" >/dev/null 2>&1 || { docker network create "$n" >/dev/null && info "network '$n' created"; }
   done
-  mkdir -p "$ROOT"/{htdocs,certs} "$ROOT"/data/{traefik/letsencrypt,portainer,mysql56,mysql84,mariadb,postgres17}
+  mkdir -p "$ROOT"/{htdocs,certs} "$ROOT"/data/{ssh,traefik/letsencrypt,portainer,mysql56,mysql84,mariadb,postgres17}
   local d
   for d in "$STACKS"/*/*/; do
     d="${d%/}"; [[ "$d" == */_* ]] && continue; [ -f "$d/compose.yml" ] || continue
@@ -153,6 +153,11 @@ TZ=Asia/Jakarta
 CLIENT_MAX_BODY_SIZE=64m
 # dev: https://$name.mysite.test
 APP_HOST_DEV=$name.mysite.test
+# Database on the Windows 10 host (stack "remote", profile windows): DB_HOST=windows-mysql DB_PORT=3309.
+# Code with 127.0.0.1:3306 hard-coded? enable the in-app proxy:
+# COMPOSE_PROFILES=localdb
+# DB_UPSTREAM_HOST=windows-mysql
+# DB_UPSTREAM_PORT=3309
 EOF
   cat > "$d/.env.prod.example" <<EOF
 APP_NAME=$name

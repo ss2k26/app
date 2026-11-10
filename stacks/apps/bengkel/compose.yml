@@ -19,6 +19,22 @@ services:
       - php-socket:/var/run/php
     networks:
       - data            # reach databases: mysql56 / mysql84 / mariadb / postgres
+    extra_hosts:
+      # MySQL on the Windows host through stack "remote" (profile windows): DB_HOST=windows-mysql DB_PORT=3309
+      - "${WINDOWS_ALIAS:-windows-mysql}:host-gateway"
+
+  # Optional (COMPOSE_PROFILES=localdb): makes 127.0.0.1:3306 INSIDE this app reach another database,
+  # for code that has "127.0.0.1" hard-coded. Shares php's network namespace (and its /etc/hosts).
+  dbproxy:
+    image: alpine/socat
+    profiles: [localdb]
+    restart: unless-stopped
+    network_mode: "service:php"
+    depends_on:
+      - php
+    command:
+      - tcp-listen:${DB_LOCAL_PORT:-3306},bind=127.0.0.1,fork,reuseaddr
+      - tcp-connect:${DB_UPSTREAM_HOST:-windows-mysql}:${DB_UPSTREAM_PORT:-3309}
 
   web:
     image: nginx:alpine
