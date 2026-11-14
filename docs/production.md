@@ -58,3 +58,19 @@ Published on `127.0.0.1:8080` only: `ssh -L 8080:127.0.0.1:8080 user@vps` then `
 bin/platform pull traefik portainer && bin/platform up traefik portainer
 bin/platform build php72 && bin/platform up bengkel -- --force-recreate
 ```
+
+## Long-running PHP requests (> 1 minute)
+A request passes several timeouts; the shortest one wins and shows up as a `504`/`502` or a killed script. Set them per app in `stacks/apps/<app>/.env` and **keep them equal**:
+
+```env
+FASTCGI_READ_TIMEOUT=600s          # how long nginx waits for php-fpm   (nginx default is only 60s; platform default 300s)
+FASTCGI_SEND_TIMEOUT=600s
+PHP_MAX_EXECUTION_TIME=600         # php.ini max_execution_time (seconds, 0 = unlimited; counts CPU time on Linux)
+PHP_REQUEST_TERMINATE_TIMEOUT=600  # php-fpm hard wall-clock kill (seconds, 0 = unlimited)
+```
+Then `bin/platform build` (once, the PHP image gained the start script that applies the two `PHP_*` values) and `bin/platform up <app> -- --force-recreate`.
+
+Other hops:
+* **Traefik** does not limit the wait for the backend by default (`writeTimeout` 0). Its `readTimeout` (60s) only limits *receiving a request*, i.e. very slow or large uploads; raise it with `--entrypoints.websecure.transport.respondingTimeouts.readTimeout=...` if needed.
+* **Cloudflare** (if you put it in front) has its own proxy timeout that you cannot raise on lower plans (100s by my knowledge; check your plan). For jobs longer than that, return immediately and run the work in a queue/background job.
+* For jobs of many minutes a queue worker is usually more robust than a very long web request.

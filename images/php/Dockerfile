@@ -23,7 +23,11 @@ RUN curl -sSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.or
 RUN apt-get update && apt-get install -y --no-install-recommends \
       php${PHP_VERSION}-fpm php${PHP_VERSION}-cli php${PHP_VERSION}-mysql php${PHP_VERSION}-pgsql \
       php${PHP_VERSION}-mbstring php${PHP_VERSION}-zip php${PHP_VERSION}-gd php${PHP_VERSION}-xml \
-      php${PHP_VERSION}-curl php${PHP_VERSION}-bcmath php${PHP_VERSION}-opcache \
+      php${PHP_VERSION}-curl php${PHP_VERSION}-bcmath \
+    # OPcache became part of PHP core in 8.5 (no php8.5-opcache package); older versions still need it
+    && if dpkg --compare-versions "${PHP_VERSION}" lt 8.5; then \
+         apt-get install -y --no-install-recommends php${PHP_VERSION}-opcache; \
+       fi \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Optional: wkhtmltopdf (patched Qt) + fonts, only when WITH_WKHTMLTOPDF=true
@@ -52,4 +56,7 @@ RUN mkdir -p /var/run/php && chown www:www /var/run/php \
 
 RUN mkdir -p /var/www/html/vendor && chown -R www:www /var/www/html
 
-CMD php-fpm${PHP_VERSION} -F
+COPY start.sh /usr/local/bin/php-fpm-start
+RUN sed -i 's/\r$//' /usr/local/bin/php-fpm-start && chmod +x /usr/local/bin/php-fpm-start
+
+CMD ["/usr/local/bin/php-fpm-start"]

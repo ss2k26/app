@@ -151,6 +151,12 @@ APP_ROOT=/app
 PHP_VERSION=$ver
 TZ=Asia/Jakarta
 CLIENT_MAX_BODY_SIZE=64m
+# Long-running PHP requests: nginx waits FASTCGI_READ_TIMEOUT, PHP stops at the two PHP_* limits (seconds).
+# Keep the three equal. Defaults: 300. Example for jobs up to 10 minutes:
+# FASTCGI_READ_TIMEOUT=600s
+# FASTCGI_SEND_TIMEOUT=600s
+# PHP_MAX_EXECUTION_TIME=600
+# PHP_REQUEST_TERMINATE_TIMEOUT=600
 # dev: https://$name.mysite.test
 APP_HOST_DEV=$name.mysite.test
 # Database on the Windows 10 host (stack "remote", profile windows): DB_HOST=windows-mysql DB_PORT=3309.
@@ -165,6 +171,12 @@ APP_ROOT=/app
 PHP_VERSION=$ver
 TZ=Asia/Jakarta
 CLIENT_MAX_BODY_SIZE=64m
+# Long-running PHP requests: nginx waits FASTCGI_READ_TIMEOUT, PHP stops at the two PHP_* limits (seconds).
+# Keep the three equal. Defaults: 300. Example for jobs up to 10 minutes:
+# FASTCGI_READ_TIMEOUT=600s
+# FASTCGI_SEND_TIMEOUT=600s
+# PHP_MAX_EXECUTION_TIME=600
+# PHP_REQUEST_TERMINATE_TIMEOUT=600
 # --- A) public domain + Let's Encrypt (delete these 3 lines to disable) ---
 APP_HOST_PROD=$name.yourdomain.com
 # APP_HOST_PROD_ALT=www.$name.yourdomain.com

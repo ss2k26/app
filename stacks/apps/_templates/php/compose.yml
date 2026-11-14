@@ -13,6 +13,9 @@ services:
     working_dir: /var/www/html
     environment:
       TZ: ${TZ:-UTC}
+      # long-running requests: keep these equal to FASTCGI_READ_TIMEOUT (seconds, 0 = unlimited)
+      PHP_MAX_EXECUTION_TIME: ${PHP_MAX_EXECUTION_TIME:-300}
+      PHP_REQUEST_TERMINATE_TIMEOUT: ${PHP_REQUEST_TERMINATE_TIMEOUT:-300}
     volumes:
       - ${APP_ROOT:-/app}/htdocs/${APP_NAME}:/var/www/html
       - php-socket:/var/run/php
@@ -44,6 +47,9 @@ services:
       WEB_ROOT: /var/www/html
       PHP_SOCKET: /var/run/php/php${PHP_VERSION:-7.2}-fpm.sock
       CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-64m}
+      FASTCGI_CONNECT_TIMEOUT: ${FASTCGI_CONNECT_TIMEOUT:-10s}
+      FASTCGI_SEND_TIMEOUT: ${FASTCGI_SEND_TIMEOUT:-300s}
+      FASTCGI_READ_TIMEOUT: ${FASTCGI_READ_TIMEOUT:-300s}
     volumes:
       - ${APP_ROOT:-/app}/htdocs/${APP_NAME}:/var/www/html:ro
       - ${APP_ROOT:-/app}/stacks/apps/_shared/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro

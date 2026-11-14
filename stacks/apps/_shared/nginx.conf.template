@@ -1,5 +1,5 @@
 # Rendered by the nginx image (envsubst) into /etc/nginx/conf.d/default.conf.
-# Variables: ${WEB_ROOT} ${PHP_SOCKET} ${CLIENT_MAX_BODY_SIZE}. nginx's own $variables are untouched.
+# Variables: ${WEB_ROOT} ${PHP_SOCKET} ${CLIENT_MAX_BODY_SIZE} and FASTCGI_CONNECT_TIMEOUT, FASTCGI_SEND_TIMEOUT, FASTCGI_READ_TIMEOUT. nginx's own $variables are untouched.
 server {
     listen 80;
     index index.php index.html;
@@ -27,6 +27,11 @@ server {
         fastcgi_pass unix:${PHP_SOCKET};
         fastcgi_index index.php;
         include fastcgi_params;
+
+        # Long-running PHP: how long nginx waits for php-fpm (set per app in .env, see docs/production.md)
+        fastcgi_connect_timeout ${FASTCGI_CONNECT_TIMEOUT};
+        fastcgi_send_timeout    ${FASTCGI_SEND_TIMEOUT};
+        fastcgi_read_timeout    ${FASTCGI_READ_TIMEOUT};
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param PATH_INFO $fastcgi_path_info;
 

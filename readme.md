@@ -16,7 +16,7 @@ One layout for a Windows/WSL dev PC and a VPS. Same compose files everywhere; on
 /app  (symlink to /mnt/d/app on WSL, /home/ubuntu/app on a VPS)
 ├── bin/platform                   CLI wrapper (init, up, down, logs, exec, certs, new-app ...)
 ├── .env.example  -> .env          PLATFORM_ENV=dev|prod, PLATFORM_STACKS=..., TZ
-├── images/php/                    ONE Dockerfile -> local/php:5.6 | 7.2 | 7.4 | 8.3
+├── images/php/                    ONE Dockerfile -> local/php:5.6 | 7.2 | 7.4 | 8.3 | 8.5
 ├── stacks/
 │   ├── core/
 │   │   ├── traefik/               edge router + cert generator   (networks: edge)
@@ -42,7 +42,7 @@ A web container is never on the database network, and databases are never reacha
 ```bash
 sudo ln -s /mnt/d/app /app && cd /app
 bin/platform init dev            # networks, data dirs, .env files
-bin/platform build               # PHP images (once; php56 php72 php74 php83)
+bin/platform build               # PHP images (once; php56 php72 php74 php83 php85)
 bin/platform up                  # traefik, portainer, mysql56 (PLATFORM_STACKS in .env)
 bin/platform up bengkel          # an app (code in htdocs/bengkel)
 bin/platform exec bengkel php composer install

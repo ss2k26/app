@@ -1,6 +1,6 @@
 # Build the shared PHP images once:   bin/platform build           (all)
 #                                      bin/platform build php72     (one)
-# Result: local/php:5.6  local/php:7.2  local/php:7.4  local/php:8.3
+# Result: local/php:5.6  7.2  7.4  8.3  8.5
 # Add a version = copy a block, change the numbers.
 name: php-images
 
@@ -25,3 +25,8 @@ services:
     build:
       context: .
       args: { PHP_VERSION: "8.3", COMPOSER_TAG: "2" }
+  php85:
+    image: local/php:8.5
+    build:
+      context: .
+      args: { PHP_VERSION: "8.5", COMPOSER_TAG: "2" }
