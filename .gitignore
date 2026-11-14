@@ -13,3 +13,6 @@ stacks/**/.env
 *.crt
 *.key
 acme.json
+
+# sync-apps backups
+stacks/apps/*/compose.yml.bak

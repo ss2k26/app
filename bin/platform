@@ -151,19 +151,8 @@ APP_ROOT=/app
 PHP_VERSION=$ver
 TZ=Asia/Jakarta
 CLIENT_MAX_BODY_SIZE=64m
-# Long-running PHP requests: nginx waits FASTCGI_READ_TIMEOUT, PHP stops at the two PHP_* limits (seconds).
-# Keep the three equal. Defaults: 300. Example for jobs up to 10 minutes:
-# FASTCGI_READ_TIMEOUT=600s
-# FASTCGI_SEND_TIMEOUT=600s
-# PHP_MAX_EXECUTION_TIME=600
-# PHP_REQUEST_TERMINATE_TIMEOUT=600
 # dev: https://$name.mysite.test
 APP_HOST_DEV=$name.mysite.test
-# Database on the Windows 10 host (stack "remote", profile windows): DB_HOST=windows-mysql DB_PORT=3309.
-# Code with 127.0.0.1:3306 hard-coded? enable the in-app proxy:
-# COMPOSE_PROFILES=localdb
-# DB_UPSTREAM_HOST=windows-mysql
-# DB_UPSTREAM_PORT=3309
 EOF
   cat > "$d/.env.prod.example" <<EOF
 APP_NAME=$name
@@ -171,12 +160,6 @@ APP_ROOT=/app
 PHP_VERSION=$ver
 TZ=Asia/Jakarta
 CLIENT_MAX_BODY_SIZE=64m
-# Long-running PHP requests: nginx waits FASTCGI_READ_TIMEOUT, PHP stops at the two PHP_* limits (seconds).
-# Keep the three equal. Defaults: 300. Example for jobs up to 10 minutes:
-# FASTCGI_READ_TIMEOUT=600s
-# FASTCGI_SEND_TIMEOUT=600s
-# PHP_MAX_EXECUTION_TIME=600
-# PHP_REQUEST_TERMINATE_TIMEOUT=600
 # --- A) public domain + Let's Encrypt (delete these 3 lines to disable) ---
 APP_HOST_PROD=$name.yourdomain.com
 # APP_HOST_PROD_ALT=www.$name.yourdomain.com
@@ -185,9 +168,86 @@ ACME_RESOLVER=le
 APP_IP_HOST=203.0.113.10
 APP_IP_EP=$ep
 EOF
+  SYNC_APPLY=1 SYNC_QUIET=1 apply_env_snippets "$d"        # optional settings (templates/env-snippets)
   info "created stacks/apps/$name  ($type, PHP $ver, IP entrypoint $ep)"
   echo "   put the code in htdocs/$name, then:  platform init && platform up $name"
   echo "   DB host inside the app: mysql56 | mysql84 | mariadb | postgres"
+}
+
+# ---- keeping existing apps in step with the templates --------------------------------------
+SNIP_DIR="$STACKS/apps/_templates/env-snippets"
+
+# append every env snippet whose marker key is missing from <app>/.env.{dev,prod}.example
+apply_env_snippets() {       # $1 = app dir ; SYNC_APPLY=1 writes, otherwise only reports
+  local d="$1" m s f marker applies
+  for m in dev prod; do
+    f="$d/.env.$m.example"; [ -f "$f" ] || continue
+    for s in "$SNIP_DIR"/*.snippet; do
+      [ -f "$s" ] || continue
+      marker="$(sed -n 's/^# marker: *//p' "$s" | head -1)"
+      applies="$(sed -n 's/^# applies: *//p' "$s" | head -1)"
+      [[ " $applies " == *" $m "* ]] || continue
+      grep -qF -- "$marker" "$f" && continue
+      if [ "${SYNC_APPLY:-0}" = 1 ]; then
+        [ -n "$(tail -c1 "$f")" ] && echo >> "$f"
+        grep -vE '^# (marker|applies):' "$s" >> "$f"
+        [ "${SYNC_QUIET:-0}" = 1 ] || echo "     + $(basename "$s" .snippet) -> $(basename "$f")"
+      else
+        echo "     would add $(basename "$s" .snippet) -> $(basename "$f")"
+      fi
+    done
+  done
+}
+
+services_of() {              # service names of a compose file
+  awk '/^services:/{s=1;next} /^[A-Za-z]/{s=0} s && /^  [A-Za-z0-9_-]+: *$/ {gsub(/[: ]/,""); print}' "$1"
+}
+
+cmd_sync_apps() {
+  local apply=0 show=0 up=0 force=0 names=() a d n type tpl extra s changed=()
+  for a in "$@"; do
+    case "$a" in
+      --apply) apply=1;; --diff) show=1;; --force) force=1;; --up) apply=1; up=1;;
+      -*) die "unknown option '$a' (--apply --diff --force --up)";;
+      *) names+=("$a");;
+    esac
+  done
+  if [ "${#names[@]}" -eq 0 ]; then
+    for d in "$STACKS"/apps/*/; do d="${d%/}"; [[ "$(basename "$d")" == _* ]] && continue; [ -f "$d/compose.yml" ] && names+=("$(basename "$d")"); done
+  fi
+  [ "${#names[@]}" -gt 0 ] || die "no apps found in stacks/apps"
+  [ "$apply" -eq 1 ] || info "dry run - nothing is changed. --diff shows the changes, --apply writes them."
+  for n in "${names[@]}"; do
+    d="$STACKS/apps/$n"; [ -f "$d/compose.yml" ] || { warn "$n: no compose.yml, skipped"; continue; }
+    if grep -q 'WEB_ROOT: /var/www/html/public' "$d/compose.yml" || grep -q 'vendor:/var/www/html/vendor' "$d/compose.yml"; then type=laravel; else type=php; fi
+    tpl="$STACKS/apps/_templates/$type/compose.yml"
+    extra=""; for s in $(services_of "$d/compose.yml"); do case "$s" in php|web|dbproxy) ;; *) extra="$extra $s";; esac; done
+    if cmp -s "$tpl" "$d/compose.yml"; then
+      echo "  $n ($type): compose up to date"
+    elif [ -n "$extra" ] && [ "$force" -eq 0 ]; then
+      warn "$n: customised compose (extra services:$extra) - skipped. Merge by hand (platform sync-apps $n --diff) or use --force"
+      [ "$show" -eq 1 ] && { diff -u "$d/compose.yml" "$tpl" || true; }
+    else
+      echo "  $n ($type): compose differs from the template"
+      [ "$show" -eq 1 ] && { diff -u "$d/compose.yml" "$tpl" || true; }
+      if [ "$apply" -eq 1 ]; then
+        cp "$d/compose.yml" "$d/compose.yml.bak"; cp "$tpl" "$d/compose.yml"
+        echo "     updated (previous file kept as compose.yml.bak)"; changed+=("$n")
+      fi
+    fi
+    SYNC_APPLY=$apply apply_env_snippets "$d"
+  done
+  echo
+  if [ "$apply" -eq 1 ] && [ "${#changed[@]}" -gt 0 ]; then
+    if [ "$up" -eq 1 ]; then
+      for n in "${changed[@]}"; do info "$n: recreate"; run_dc "$STACKS/apps/$n" up -d --force-recreate; done
+    else
+      info "now recreate the changed apps:  ${changed[*]}"
+      echo "   platform up ${changed[*]} -- --force-recreate      (or re-run with --up)"
+      echo "   Portainer-owned stacks: paste the new stacks/apps/<app>/compose.yml into the stack editor and redeploy."
+    fi
+    echo "   Your real .env files were not touched; new variables have defaults. Review the *.example files for new options."
+  fi
 }
 
 cmd_portainer_import() {
@@ -230,6 +290,8 @@ platform - manage the container platform  (root: $ROOT, mode: $(mode))
   config <stack>               rendered compose (after env substitution)
   certs [--force]              (re)generate the Traefik certificate and reload Traefik
   new-app <name> [laravel|php] [php-version]
+  sync-apps [app...] [--diff] [--apply] [--up] [--force]
+                               bring apps in step with stacks/apps/_templates (compose + env examples); dry run by default
   list | status
   portainer-import <stack>     (experimental) create the stack in Portainer from its file via the API
 EOF
@@ -245,6 +307,7 @@ main() {
     exec) cmd_exec "$@";;           sh|shell) cmd_sh "$@";;
     dc) cmd_dc "$@";;               config) cmd_config "$@";;
     certs) cmd_certs "$@";;         new-app) cmd_new_app "$@";;
+    sync-apps) cmd_sync_apps "$@";;
     list) cmd_list;;                status) cmd_status;;
     portainer-import) cmd_portainer_import "$@";;
     help|-h|--help) usage;;

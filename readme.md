@@ -72,6 +72,22 @@ bin/platform init && bin/platform up shop
 ```
 It creates `stacks/apps/shop/` (+ next free IP port) and `htdocs/shop/`. In the app, use `DB_HOST=mysql56` (or `mysql84`, `mariadb`, `postgres`), port 3306 (5432 for postgres).
 
+## Updating existing apps after a platform update
+
+Every app's `compose.yml` is a copy of `stacks/apps/_templates/<type>/compose.yml`. When the template changes (new variables, fixes), sync all apps:
+
+```bash
+bin/platform sync-apps                 # dry run: which apps differ
+bin/platform sync-apps --diff          # show the changes
+bin/platform sync-apps --apply         # write them (old file kept as compose.yml.bak)
+bin/platform sync-apps --up            # apply + force-recreate the changed apps
+bin/platform sync-apps shop legacy     # only these apps
+```
+- App type (laravel/php) is detected from the existing file. An app with extra services of its own is skipped (merge by hand, or `--force`).
+- `.env.dev.example` / `.env.prod.example` get missing optional blocks appended from `stacks/apps/_templates/env-snippets/*.snippet` (never overwritten). Your real `.env` files are not touched; new variables have defaults.
+- Portainer-owned stacks: paste the new `compose.yml` into the stack editor and redeploy.
+- Then rebuild/pull what changed: `bin/platform build` (images) and `bin/platform up <app>`.
+
 ## Everyday commands
 
 ```bash
