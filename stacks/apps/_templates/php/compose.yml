@@ -21,6 +21,8 @@ services:
       - php-socket:/var/run/php
     networks:
       - data            # reach databases: mysql56 / mysql84 / mariadb / postgres
+      # Call other apps (http://<app>.app): set PHP_APPS_NETWORK=apps in .env. Default "default" = only this project's private, empty network.
+      - ${PHP_APPS_NETWORK:-default}
     extra_hosts:
       # MySQL on the Windows host through stack "remote" (profile windows): DB_HOST=windows-mysql DB_PORT=3309
       - "${WINDOWS_ALIAS:-windows-mysql}:host-gateway"
@@ -55,7 +57,10 @@ services:
       - ${APP_ROOT:-/app}/stacks/apps/_shared/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
       - php-socket:/var/run/php
     networks:
-      - edge            # only the web container is reachable by Traefik
+      edge: {}          # only the web container is reachable by Traefik
+      apps:             # app-to-app calls: other apps reach this one at http://${APP_NAME}.app
+        aliases:
+          - ${APP_NAME}.app
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=edge"
@@ -81,6 +86,9 @@ networks:
   data:
     external: true
     name: data
+  apps:
+    external: true
+    name: apps
 
 volumes:
   php-socket:

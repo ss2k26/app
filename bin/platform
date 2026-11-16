@@ -10,7 +10,7 @@ if [ -d /app ] && [ "$(cd /app && pwd -P)" = "$REAL_ROOT" ]; then ROOT=/app; els
 export APP_ROOT="$ROOT"
 STACKS="$ROOT/stacks"
 GLOBAL_ENV="$ROOT/.env"
-NETWORKS=(edge data)
+NETWORKS=(edge data apps)
 
 c_red=$'\e[31m'; c_grn=$'\e[32m'; c_ylw=$'\e[33m'; c_dim=$'\e[2m'; c_off=$'\e[0m'
 die()  { echo "${c_red}error:${c_off} $*" >&2; exit 1; }
@@ -45,6 +45,12 @@ dc_for() {
   DC+=(-f "$d/compose.yml")
 }
 
+ensure_networks() {          # shared external networks (edge data apps); cheap, safe to repeat
+  local n
+  for n in "${NETWORKS[@]}"; do
+    docker network inspect "$n" >/dev/null 2>&1 || { docker network create "$n" >/dev/null && info "network '$n' created"; }
+  done
+}
 run_dc() { local d="$1"; shift; dc_for "$d"; "${DC[@]}" "$@"; }
 
 split_args() {               # sets STACK_ARGS (before --) and EXTRA (after --)
@@ -64,9 +70,7 @@ cmd_init() {
   [[ "$m" == dev || "$m" == prod ]] || die "usage: platform init [dev|prod]"
   command -v docker >/dev/null || die "docker not found"
   [ -f "$GLOBAL_ENV" ] || { sed "s/^PLATFORM_ENV=.*/PLATFORM_ENV=$m/" "$ROOT/.env.example" > "$GLOBAL_ENV"; info "created .env (PLATFORM_ENV=$m)"; }
-  for n in "${NETWORKS[@]}"; do
-    docker network inspect "$n" >/dev/null 2>&1 || { docker network create "$n" >/dev/null && info "network '$n' created"; }
-  done
+  ensure_networks
   mkdir -p "$ROOT"/{htdocs,certs} "$ROOT"/data/{ssh,traefik/letsencrypt,portainer,mysql56,mysql84,mariadb,postgres17}
   local d
   for d in "$STACKS"/*/*/; do
@@ -93,7 +97,7 @@ each_stack() {               # each_stack <docker compose args...>   (uses STACK
   for n in "${names[@]}"; do d="$(resolve_stack "$n")"; info "$(basename "$d"): $*"; run_dc "$d" "$@" "${EXTRA[@]}"; done
 }
 
-cmd_up()      { split_args "$@"; each_stack up -d; }
+cmd_up()      { ensure_networks; split_args "$@"; each_stack up -d; }
 cmd_pull()    { split_args "$@"; each_stack pull; }
 cmd_ps()      { split_args "$@"; each_stack ps; }
 cmd_restart() { split_args "$@"; each_stack restart; }
@@ -240,6 +244,7 @@ cmd_sync_apps() {
   echo
   if [ "$apply" -eq 1 ] && [ "${#changed[@]}" -gt 0 ]; then
     if [ "$up" -eq 1 ]; then
+      ensure_networks
       for n in "${changed[@]}"; do info "$n: recreate"; run_dc "$STACKS/apps/$n" up -d --force-recreate; done
     else
       info "now recreate the changed apps:  ${changed[*]}"

@@ -88,6 +88,21 @@ bin/platform sync-apps shop legacy     # only these apps
 - Portainer-owned stacks: paste the new `compose.yml` into the stack editor and redeploy.
 - Then rebuild/pull what changed: `bin/platform build` (images) and `bin/platform up <app>`.
 
+## Apps calling other apps
+
+Every app's web container is reachable from other apps at `http://<app>.app` over the shared `apps` network (no DNS, no TLS, same in dev and prod). The *calling* app opts in:
+
+```bash
+# stacks/apps/panglima-kediri/.env
+PHP_APPS_NETWORK=apps
+BENGKEL_API_URL=http://bengkel.app     # prod on another server: the real https URL
+```
+```bash
+bin/platform init                      # creates the 'apps' network once (also done by 'up')
+bin/platform up panglima-kediri -- --force-recreate
+```
+Send `Host: bengkel.mysite.test` if the target builds URLs from the request host. `bengkel.mysite.test` itself does not resolve inside containers (Windows DNS only) and its mkcert certificate is not trusted there.
+
 ## Everyday commands
 
 ```bash

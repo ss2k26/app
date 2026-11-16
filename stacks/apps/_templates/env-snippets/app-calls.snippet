@@ -1,0 +1,6 @@
+# marker: PHP_APPS_NETWORK
+# applies: dev prod
+# Call other apps from PHP over Docker (no DNS/TLS): every app answers at http://<app>.app (e.g. http://bengkel.app).
+# Enable in the CALLING app (uncomment), keep Host header if the target builds URLs from it:
+# PHP_APPS_NETWORK=apps
+# BENGKEL_API_URL=http://bengkel.app

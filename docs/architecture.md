@@ -37,6 +37,7 @@ flowchart LR
 * **No hard-coded container names for apps** (`<app>-php-1`, `<app>-web-1`); use `platform exec <app> php ...`. Infrastructure containers (traefik, portainer, mysql56-server ...) keep fixed names.
 * **web and php talk over a unix socket** on a tmpfs volume (as before), so they need no shared network.
 * **Only web containers join `edge`; only php containers and databases join `data`.**
+* **`apps` carries app-to-app calls:** every web container joins it with alias `<app>.app`; a php container joins only when `PHP_APPS_NETWORK=apps` is set in its app `.env`.
 
 ## Routing model (per app, three routers in the same file)
 
@@ -53,7 +54,7 @@ A mode that is not configured keeps its rule on `disabled.invalid`, which never 
 | Before | Now |
 |---|---|
 | 3 compose files per app/stack (dev, prod, ip), copies drift | 1 file + env |
-| one flat `shared-db-network` for everything | `edge` + `data` |
+| one flat `shared-db-network` for everything | `edge` + `data` + `apps` |
 | a new IP port = edit Traefik compose in two places | pool `ip-8443 ... ip-8450` pre-declared; an app just picks one |
 | prod labels such as ``Host(`://yourfirm.com`)`` (invalid) | host comes from `APP_HOST_PROD` |
 | IP stack default cert used `keyFile: server-ip.pem` (the cert, not the key) | one `default.pem` / `default-key.pem` pair |
