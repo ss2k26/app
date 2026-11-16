@@ -8,6 +8,7 @@ services:
     image: alpine:3
     container_name: dev-dns
     restart: unless-stopped
+    mem_limit: ${DNS_MEM_LIMIT:-64m}
     ports:
       - "127.0.0.1:53:53/udp"
       - "127.0.0.1:53:53/tcp"

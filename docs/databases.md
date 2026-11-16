@@ -58,7 +58,7 @@ PHP 5.6 / 7.2 clients cannot use `caching_sha2_password`. `mysql84/conf/base.cnf
 PHP 7.4+ can use the default plugin; remove the line if you only run those.
 
 ## Memory profiles
-`*_CNF=low-memory|production` picks `conf/<name>.cnf`; `*_MEM_LIMIT=2g` caps the container (`0` = unlimited).
+`*_CNF=low-memory|production` picks `conf/<name>.cnf`; `*_MEM_LIMIT=2g` caps the container (`0` = unlimited).  Suggested caps per profile: docs/memory.md.
 
 ## Backup / restore
 ```bash

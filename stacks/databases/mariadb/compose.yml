@@ -6,6 +6,7 @@ services:
     image: alpine/socat
     container_name: mariadb-proxy
     restart: unless-stopped
+    mem_limit: ${MARIADB_PROXY_MEM_LIMIT:-32m}
     command:
       - tcp-listen:3306,fork,reuseaddr,max-children=${DB_MAX_CLIENTS:-200}
       - tcp-connect:127.0.0.1:13306
@@ -23,7 +24,7 @@ services:
     network_mode: "service:proxy"
     depends_on:
       - proxy
-    mem_limit: ${MARIADB_MEM_LIMIT:-0}
+    mem_limit: ${MARIADB_MEM_LIMIT:-512m}
     environment:
       TZ: ${TZ:-UTC}
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-}

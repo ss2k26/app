@@ -1,0 +1,8 @@
+# marker: PHP_FPM_PM
+# applies: dev prod
+# PHP worker mode. ondemand (default): workers start with the first request and exit after
+# PHP_FPM_PROCESS_IDLE_TIMEOUT, so an idle app holds almost no worker memory. Best with many apps per server.
+# dynamic/static keep workers warm (a little faster after idle; uses memory all the time).
+# PHP_FPM_PM=ondemand
+# PHP_FPM_MAX_CHILDREN=3
+# PHP_FPM_PROCESS_IDLE_TIMEOUT=10s

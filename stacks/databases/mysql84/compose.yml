@@ -8,6 +8,7 @@ services:
     image: alpine/socat
     container_name: mysql84-proxy
     restart: unless-stopped
+    mem_limit: ${MYSQL84_PROXY_MEM_LIMIT:-32m}
     command:
       - tcp-listen:3306,fork,reuseaddr,max-children=${DB_MAX_CLIENTS:-200}
       - tcp-connect:127.0.0.1:13306
@@ -25,7 +26,7 @@ services:
     network_mode: "service:proxy"
     depends_on:
       - proxy
-    mem_limit: ${MYSQL84_MEM_LIMIT:-0}
+    mem_limit: ${MYSQL84_MEM_LIMIT:-768m}
     environment:
       TZ: ${TZ:-UTC}
       MYSQL_TCP_PORT: "13306"

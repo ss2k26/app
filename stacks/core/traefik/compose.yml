@@ -22,6 +22,7 @@ services:
     image: traefik:${TRAEFIK_TAG:-v3.7}
     container_name: traefik
     restart: unless-stopped
+    mem_limit: ${TRAEFIK_MEM_LIMIT:-256m}
     depends_on:
       certs:
         condition: service_completed_successfully

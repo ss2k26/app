@@ -11,8 +11,14 @@ services:
     image: local/php:${PHP_VERSION:-7.2}
     restart: unless-stopped
     working_dir: /var/www/html
+    # Rule of thumb: PHP_MEM_LIMIT >= PHP_FPM_MAX_CHILDREN x PHP_MEMORY_LIMIT + ~100m
+    mem_limit: ${PHP_MEM_LIMIT:-512m}
     environment:
       TZ: ${TZ:-UTC}
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-128M}
+      PHP_FPM_MAX_CHILDREN: ${PHP_FPM_MAX_CHILDREN:-3}
+      PHP_FPM_PM: ${PHP_FPM_PM:-ondemand}
+      PHP_FPM_PROCESS_IDLE_TIMEOUT: ${PHP_FPM_PROCESS_IDLE_TIMEOUT:-10s}
       # long-running requests: keep these equal to FASTCGI_READ_TIMEOUT (seconds, 0 = unlimited)
       PHP_MAX_EXECUTION_TIME: ${PHP_MAX_EXECUTION_TIME:-300}
       PHP_REQUEST_TERMINATE_TIMEOUT: ${PHP_REQUEST_TERMINATE_TIMEOUT:-300}
@@ -34,6 +40,7 @@ services:
     image: alpine/socat
     profiles: [localdb]
     restart: unless-stopped
+    mem_limit: ${DBPROXY_MEM_LIMIT:-32m}
     network_mode: "service:php"
     depends_on:
       - php
@@ -44,6 +51,7 @@ services:
   web:
     image: nginx:alpine
     restart: unless-stopped
+    mem_limit: ${WEB_MEM_LIMIT:-128m}
     depends_on:
       - php
     environment:

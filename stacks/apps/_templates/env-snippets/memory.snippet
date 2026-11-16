@@ -1,0 +1,9 @@
+# marker: PHP_MEM_LIMIT
+# applies: dev prod
+# Memory (container caps; defaults apply when unset, 0 = unlimited). Rule of thumb:
+#   PHP_MEM_LIMIT >= PHP_FPM_MAX_CHILDREN x PHP_MEMORY_LIMIT + ~100m     (defaults: 3 x 128M -> 512m)
+# Busy/heavy app example (report/export jobs):
+# PHP_MEMORY_LIMIT=256M
+# PHP_FPM_MAX_CHILDREN=8
+# PHP_MEM_LIMIT=2300m
+# WEB_MEM_LIMIT=128m

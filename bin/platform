@@ -97,6 +97,10 @@ each_stack() {               # each_stack <docker compose args...>   (uses STACK
   for n in "${names[@]}"; do d="$(resolve_stack "$n")"; info "$(basename "$d"): $*"; run_dc "$d" "$@" "${EXTRA[@]}"; done
 }
 
+cmd_mem() {                  # live memory use vs. cap of every running container
+  docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.CPUPerc}}' | sort -k1,1 | { read -r h; echo "$h"; cat; }
+  echo; echo "MemUsage shows 'used / limit'; a limit equal to total RAM means no cap is set."
+}
 cmd_up()      { ensure_networks; split_args "$@"; each_stack up -d; }
 cmd_pull()    { split_args "$@"; each_stack pull; }
 cmd_ps()      { split_args "$@"; each_stack ps; }
@@ -297,6 +301,7 @@ platform - manage the container platform  (root: $ROOT, mode: $(mode))
   new-app <name> [laravel|php] [php-version]
   sync-apps [app...] [--diff] [--apply] [--up] [--force]
                                bring apps in step with stacks/apps/_templates (compose + env examples); dry run by default
+  mem                          memory use vs. limit of every running container
   list | status
   portainer-import <stack>     (experimental) create the stack in Portainer from its file via the API
 EOF
@@ -314,6 +319,7 @@ main() {
     certs) cmd_certs "$@";;         new-app) cmd_new_app "$@";;
     sync-apps) cmd_sync_apps "$@";;
     list) cmd_list;;                status) cmd_status;;
+    mem) cmd_mem;;
     portainer-import) cmd_portainer_import "$@";;
     help|-h|--help) usage;;
     *) usage; exit 1;;

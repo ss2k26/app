@@ -103,6 +103,10 @@ bin/platform up panglima-kediri -- --force-recreate
 ```
 Send `Host: bengkel.mysite.test` if the target builds URLs from the request host. `bengkel.mysite.test` itself does not resolve inside containers (Windows DNS only) and its mkcert certificate is not trusted there.
 
+## Memory limits
+
+Every container has a suggested `mem_limit` (variables like `MYSQL84_MEM_LIMIT`, `PHP_MEM_LIMIT`, `0` = unlimited); see [docs/memory.md](docs/memory.md) for the defaults, sizing rules and `bin/platform mem`. Existing apps pick it up with `bin/platform sync-apps --up`.
+
 ## Everyday commands
 
 ```bash

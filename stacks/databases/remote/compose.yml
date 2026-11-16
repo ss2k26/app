@@ -19,6 +19,7 @@ x-forwarder: &forwarder
     context: ${APP_ROOT:-/app}/stacks/databases/remote
   image: local/db-forwarder:latest
   restart: unless-stopped
+  mem_limit: ${REMOTE_MEM_LIMIT:-64m}
   volumes:
     - ${APP_ROOT:-/app}/data/ssh:/ssh:ro        # your private key (never committed: /data is git-ignored)
     - ssh-state:/root/.ssh                       # known_hosts survives restarts

@@ -10,7 +10,7 @@ services:
     image: postgres:${POSTGRES_TAG:-17-alpine}
     container_name: postgres-server
     restart: unless-stopped
-    mem_limit: ${POSTGRES_MEM_LIMIT:-0}
+    mem_limit: ${POSTGRES_MEM_LIMIT:-512m}
     shm_size: 256mb
     environment:
       TZ: ${TZ:-UTC}
@@ -39,6 +39,7 @@ services:
     image: alpine/socat
     container_name: postgres-proxy
     restart: unless-stopped
+    mem_limit: ${POSTGRES_PROXY_MEM_LIMIT:-32m}
     depends_on:
       db:
         condition: service_healthy
