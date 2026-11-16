@@ -69,9 +69,19 @@ sysctl vm.swappiness=10 && echo 'vm.swappiness=10' > /etc/sysctl.d/99-swap.conf
 ## Checking
 
 ```bash
-bin/platform mem        # used / limit per running container
+bin/platform mem        # grouped: CORE, DATABASES, APPS - one row per stack, with a total per group
+bin/platform mem -v     # same, plus every container under its stack
 ```
-A limit equal to the total RAM shown means no cap is set (`0`). Apply a changed cap with
+Output looks like (used / cap):
+```
+APPS
+  bengkel          2 ctr      54 MiB / 640 MiB
+  shop             2 ctr    1.10 GiB / unlimited*
+  TOTAL apps                1.16 GiB / 768 MiB + unlimited*
+ALL CONTAINERS              1.72 GiB  caps 2.03 GiB + unlimited*   host RAM 3.82 GiB, containers use 45%
+```
+Groups come from where each stack lives (`stacks/core`, `stacks/databases`, `stacks/apps`); anything else
+is listed as OTHER. Compare the **used** total with host RAM, not the caps. `unlimited*` means no cap is set (`0`). Apply a changed cap with
 `bin/platform up <stack> -- --force-recreate`. For existing apps run `bin/platform sync-apps --up` once to
 pick up the new template (it adds the `mem_limit` lines).
 

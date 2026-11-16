@@ -97,9 +97,44 @@ each_stack() {               # each_stack <docker compose args...>   (uses STACK
   for n in "${names[@]}"; do d="$(resolve_stack "$n")"; info "$(basename "$d"): $*"; run_dc "$d" "$@" "${EXTRA[@]}"; done
 }
 
-cmd_mem() {                  # live memory use vs. cap of every running container
-  docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.CPUPerc}}' | sort -k1,1 | { read -r h; echo "$h"; cat; }
-  echo; echo "MemUsage shows 'used / limit'; a limit equal to total RAM means no cap is set."
+cmd_mem() {                  # live memory per group (core / databases / apps), per stack; -v = per container
+  local verbose=0 total; [ "${1:-}" = "-v" ] || [ "${1:-}" = "--containers" ] && verbose=1
+  total="$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)"
+  { docker ps --format 'P|{{.Names}}|{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.project.working_dir"}}'
+    docker stats --no-stream --format 'S|{{.Name}}|{{.MemUsage}}'; } | awk -F'|' -v total="$total" -v verbose="$verbose" '
+    function bytes(x,   n,u) { n=x+0; u=x; gsub(/[0-9.]/,"",u)
+      if (u ~ /^[Kk]i?B$/) return n*1024; if (u ~ /^Mi?B$/) return n*1048576
+      if (u ~ /^Gi?B$/) return n*1073741824; if (u ~ /^Ti?B$/) return n*1099511627776; return n }
+    function human(b) { if (b>=1073741824) return sprintf("%.2f GiB",b/1073741824); if (b>=1048576) return sprintf("%.0f MiB",b/1048576); return sprintf("%.0f KiB",b/1024) }
+    $1=="P" { proj[$2]=($3==""?$2:$3); dir[$2]=$4; next }
+    $1=="S" { split($3,a," / "); used[$2]=bytes(a[1]); lim[$2]=bytes(a[2]); order[++n]=$2 }
+    END {
+      split("core databases apps other",G," ")
+      for (g=1; g<=4; g++) {
+        gname=G[g]; gu=0; gl=0; gunl=0; header=0; delete su; delete sl; delete sc; delete sunl; ns=0; delete seen
+        for (k=1; k<=n; k++) { c=order[k]; d=dir[c]; grp="other"
+          if (d ~ /\/stacks\/core\//) grp="core"; else if (d ~ /\/stacks\/databases\//) grp="databases"; else if (d ~ /\/stacks\/apps\//) grp="apps"
+          if (grp != gname) continue
+          if (!header) { printf "\n%s\n", toupper(gname); header=1 }
+          st=proj[c]; if (!(st in seen)) { seen[st]=1; stk[++ns]=st }
+          su[st]+=used[c]; sc[st]++; gu+=used[c]
+          if (total>0 && lim[c] >= total*0.98) { sunl[st]=1; gunl=1 } else { sl[st]+=lim[c]; gl+=lim[c] }
+          if (verbose) cont[st]=cont[st] sprintf("      %-30s %10s / %s\n", c, human(used[c]), (total>0 && lim[c]>=total*0.98)?"unlimited":human(lim[c]))
+        }
+        # sort stacks by name (simple insertion sort)
+        for (x=2; x<=ns; x++) { v=stk[x]; y=x-1; while (y>=1 && stk[y]>v) { stk[y+1]=stk[y]; y-- } stk[y+1]=v }
+        for (x=1; x<=ns; x++) { st=stk[x]
+          printf "  %-28s %2d ctr  %10s / %s\n", st, sc[st], human(su[st]), (sunl[st]?"unlimited*":human(sl[st]))
+          if (verbose) printf "%s", cont[st] }
+        if (header) printf "  %-28s        %10s / %s\n", "TOTAL " gname, human(gu), (gunl?(gl>0?human(gl) " + unlimited*":"unlimited*"):human(gl))
+        all+=gu; alll+=gl; if (gunl) allunl=1
+      }
+      printf "\nALL CONTAINERS                      %10s  caps %s%s", human(all), human(alll), (allunl?" + unlimited*":"")
+      if (total>0) printf "   host RAM %s, containers use %.0f%%", human(total), 100*all/total
+      printf "\n"
+      if (allunl) print "* unlimited = no mem_limit set (0); counted as host RAM, excluded from the caps total."
+    }'
+  echo "Caps are ceilings, not reservations: compare USED with host RAM. -v lists every container."
 }
 cmd_up()      { ensure_networks; split_args "$@"; each_stack up -d; }
 cmd_pull()    { split_args "$@"; each_stack pull; }
@@ -301,7 +336,7 @@ platform - manage the container platform  (root: $ROOT, mode: $(mode))
   new-app <name> [laravel|php] [php-version]
   sync-apps [app...] [--diff] [--apply] [--up] [--force]
                                bring apps in step with stacks/apps/_templates (compose + env examples); dry run by default
-  mem                          memory use vs. limit of every running container
+  mem [-v]                     memory used vs. cap, grouped core / databases / apps (-v: per container)
   list | status
   portainer-import <stack>     (experimental) create the stack in Portainer from its file via the API
 EOF
@@ -319,7 +354,7 @@ main() {
     certs) cmd_certs "$@";;         new-app) cmd_new_app "$@";;
     sync-apps) cmd_sync_apps "$@";;
     list) cmd_list;;                status) cmd_status;;
-    mem) cmd_mem;;
+    mem) cmd_mem "$@";;
     portainer-import) cmd_portainer_import "$@";;
     help|-h|--help) usage;;
     *) usage; exit 1;;
