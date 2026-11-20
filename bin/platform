@@ -108,6 +108,23 @@ running_stack_dirs() {       # stack dirs (under stacks/{core,databases,apps}) t
 
 stack_container_ids() { run_dc "$1" ps -q 2>/dev/null | sort; }
 
+# pull one stack's images quietly and report one line per image (no layer-by-layer progress spam)
+pull_stack() {
+  local d="$1" i new n; local -A old=(); local imgs=()
+  while read -r i; do [ -n "$i" ] && [[ "$i" != local/* ]] && imgs+=("$i"); done < <(run_dc "$d" config --images 2>/dev/null | sort -u)
+  if [ "${#imgs[@]}" -eq 0 ]; then echo "     (nothing to pull)"; return 0; fi
+  for i in "${imgs[@]}"; do old[$i]="$(docker image inspect --format '{{.Id}}' "$i" 2>/dev/null || echo none)"; done
+  echo "     pulling ${#imgs[@]} image(s): ${imgs[*]} ..."
+  # local/* images (php) exist only on this machine: rebuild them with 'platform update --build'
+  run_dc "$d" pull --quiet --ignore-buildable --ignore-pull-failures 2>&1 | grep -v 'local/' || true
+  for i in "${imgs[@]}"; do
+    new="$(docker image inspect --format '{{.Id}}' "$i" 2>/dev/null || echo none)"
+    if [ "$new" = none ]; then echo "     ! $i  could not be pulled"
+    elif [ "$new" != "${old[$i]}" ]; then echo "     ↑ $i  updated"
+    else echo "     = $i  already current"; fi
+  done
+}
+
 cmd_update() {
   local build=0 all=0 keep=0 names=() a d n before after changed=() groups="core apps"
   for a in "$@"; do
@@ -134,8 +151,7 @@ cmd_update() {
   for d in "${dirs[@]}"; do
     n="$(basename "$d")"; info "$n: pull"
     before="$(stack_container_ids "$d")"
-    # local/* images (php) exist only on this machine: a failed pull of those is expected, rebuild them with --build
-    run_dc "$d" pull --ignore-buildable --ignore-pull-failures 2>&1 | grep -vE 'Pulling|Waiting|Already exists|Pull complete|Download complete|Verifying|Extracting|Digest|local/' || true
+    pull_stack "$d"
     run_dc "$d" up -d --remove-orphans 2>&1 | grep -E 'Recreate|Started|Created|Error|error' || true
     after="$(stack_container_ids "$d")"
     if [ "$before" != "$after" ]; then changed+=("$n"); fi
@@ -206,7 +222,8 @@ cmd_mem() {                  # live memory per group (core / databases / apps), 
   echo "Caps are ceilings, not reservations: compare USED with host RAM. -v lists every container."
 }
 cmd_up()      { ensure_networks; split_args "$@"; each_stack up -d; }
-cmd_pull()    { split_args "$@"; each_stack pull --ignore-buildable --ignore-pull-failures; }
+cmd_pull()    { split_args "$@"; local names=("${STACK_ARGS[@]}") n d; [ "${#names[@]}" -gt 0 ] || mapfile -t names < <(default_stacks)
+  for n in "${names[@]}"; do d="$(resolve_stack "$n")"; info "$(basename "$d"): pull"; pull_stack "$d"; done; }
 cmd_ps()      { split_args "$@"; each_stack ps; }
 cmd_restart() { split_args "$@"; each_stack restart; }
 cmd_down() {
