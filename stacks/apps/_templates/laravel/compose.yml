@@ -49,7 +49,7 @@ services:
       - tcp-connect:${DB_UPSTREAM_HOST:-windows-mysql}:${DB_UPSTREAM_PORT:-3309}
 
   web:
-    image: nginx:alpine
+    image: nginx:${NGINX_TAG:-stable-alpine}
     restart: unless-stopped
     mem_limit: ${WEB_MEM_LIMIT:-128m}
     depends_on:

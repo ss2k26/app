@@ -97,6 +97,75 @@ each_stack() {               # each_stack <docker compose args...>   (uses STACK
   for n in "${names[@]}"; do d="$(resolve_stack "$n")"; info "$(basename "$d"): $*"; run_dc "$d" "$@" "${EXTRA[@]}"; done
 }
 
+# ---- updating --------------------------------------------------------------------------------
+running_stack_dirs() {       # stack dirs (under stacks/{core,databases,apps}) that have running containers
+  local p d g
+  while read -r p; do
+    [ -n "$p" ] || continue
+    for g in core apps databases; do d="$STACKS/$g/$p"; [ -f "$d/compose.yml" ] && echo "$d"; done
+  done < <(docker ps --format '{{.Label "com.docker.compose.project"}}' | sort -u)
+}
+
+stack_container_ids() { run_dc "$1" ps -q 2>/dev/null | sort; }
+
+cmd_update() {
+  local build=0 all=0 keep=0 names=() a d n before after changed=() groups="core apps"
+  for a in "$@"; do
+    case "$a" in
+      --build) build=1;; --all|--databases) all=1;; --keep-images) keep=1;;
+      -*) die "unknown option '$a' (--build --databases --keep-images)";;
+      *) names+=("$a");;
+    esac
+  done
+  command -v docker >/dev/null || die "docker not found"
+  ensure_networks
+  [ "$build" -eq 1 ] && { info "rebuilding PHP images (fresh base image + security updates)"; docker compose -f "$ROOT/images/php/compose.yml" build --pull; }
+  local dirs=()
+  if [ "${#names[@]}" -gt 0 ]; then
+    for n in "${names[@]}"; do dirs+=("$(resolve_stack "$n")"); done
+  else
+    while read -r d; do
+      [ -n "$d" ] || continue
+      [[ "$d" == */databases/* && "$all" -eq 0 ]] && { warn "$(basename "$d"): database skipped (restart = downtime). Use: platform update $(basename "$d")  or --databases"; continue; }
+      dirs+=("$d")
+    done < <(running_stack_dirs)
+    [ "${#dirs[@]}" -gt 0 ] || die "no running stacks found. Name the stacks to update: platform update <stack...>"
+  fi
+  for d in "${dirs[@]}"; do
+    n="$(basename "$d")"; info "$n: pull"
+    before="$(stack_container_ids "$d")"
+    # local/* images (php) exist only on this machine: a failed pull of those is expected, rebuild them with --build
+    run_dc "$d" pull --ignore-buildable --ignore-pull-failures 2>&1 | grep -vE 'Pulling|Waiting|Already exists|Pull complete|Download complete|Verifying|Extracting|Digest|local/' || true
+    run_dc "$d" up -d --remove-orphans 2>&1 | grep -E 'Recreate|Started|Created|Error|error' || true
+    after="$(stack_container_ids "$d")"
+    if [ "$before" != "$after" ]; then changed+=("$n"); fi
+  done
+  [ "$keep" -eq 1 ] || docker image prune -f >/dev/null 2>&1 || true
+  echo
+  if [ "${#changed[@]}" -gt 0 ]; then info "updated (containers recreated): ${changed[*]}"; else info "everything already up to date"; fi
+  echo "   versions: platform versions"
+}
+
+cmd_versions() {             # software version inside each running container
+  local c img v cmd
+  printf '%-34s %-34s %s\n' CONTAINER IMAGE VERSION
+  for c in $(docker ps --format '{{.Names}}' | sort); do
+    img="$(docker inspect --format '{{.Config.Image}}' "$c" 2>/dev/null)"; cmd=""
+    case "$img" in
+      nginx*) cmd='nginx -v 2>&1';;
+      traefik*) cmd='traefik version 2>&1 | head -1';;
+      local/php*) cmd='php -v 2>&1 | head -1';;
+      mysql*) cmd='mysqld --version 2>&1';;
+      mariadb*) cmd='(mariadbd --version || mysqld --version) 2>&1';;
+      postgres*) cmd='postgres --version 2>&1';;
+      portainer*) cmd='echo "see image tag"';;
+      *) continue;;
+    esac
+    v="$(docker exec "$c" sh -c "$cmd" 2>/dev/null | head -1 | sed 's/^nginx version: //')"
+    printf '%-34s %-34s %s\n' "$c" "$img" "${v:-?}"
+  done
+}
+
 cmd_mem() {                  # live memory per group (core / databases / apps), per stack; -v = per container
   local verbose=0 total; [ "${1:-}" = "-v" ] || [ "${1:-}" = "--containers" ] && verbose=1
   total="$(docker info --format '{{.MemTotal}}' 2>/dev/null || echo 0)"
@@ -137,7 +206,7 @@ cmd_mem() {                  # live memory per group (core / databases / apps), 
   echo "Caps are ceilings, not reservations: compare USED with host RAM. -v lists every container."
 }
 cmd_up()      { ensure_networks; split_args "$@"; each_stack up -d; }
-cmd_pull()    { split_args "$@"; each_stack pull; }
+cmd_pull()    { split_args "$@"; each_stack pull --ignore-buildable --ignore-pull-failures; }
 cmd_ps()      { split_args "$@"; each_stack ps; }
 cmd_restart() { split_args "$@"; each_stack restart; }
 cmd_down() {
@@ -336,6 +405,9 @@ platform - manage the container platform  (root: $ROOT, mode: $(mode))
   new-app <name> [laravel|php] [php-version]
   sync-apps [app...] [--diff] [--apply] [--up] [--force]
                                bring apps in step with stacks/apps/_templates (compose + env examples); dry run by default
+  update [stack...] [--build] [--databases] [--keep-images]
+                               pull newer images + recreate what changed (running core + apps by default)
+  versions                     nginx / PHP / traefik / database versions of the running containers
   mem [-v]                     memory used vs. cap, grouped core / databases / apps (-v: per container)
   list | status
   portainer-import <stack>     (experimental) create the stack in Portainer from its file via the API
@@ -355,6 +427,7 @@ main() {
     sync-apps) cmd_sync_apps "$@";;
     list) cmd_list;;                status) cmd_status;;
     mem) cmd_mem "$@";;
+    update) cmd_update "$@";;       versions) cmd_versions;;
     portainer-import) cmd_portainer_import "$@";;
     help|-h|--help) usage;;
     *) usage; exit 1;;

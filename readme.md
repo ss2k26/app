@@ -107,6 +107,21 @@ Send `Host: bengkel.mysite.test` if the target builds URLs from the request host
 
 Every container has a suggested `mem_limit` (variables like `MYSQL84_MEM_LIMIT`, `PHP_MEM_LIMIT`, `0` = unlimited); see [docs/memory.md](docs/memory.md) for the defaults, sizing rules and `bin/platform mem`. Existing apps pick it up with `bin/platform sync-apps --up`.
 
+## Updating (security fixes)
+
+```bash
+bin/platform versions                  # nginx / PHP / traefik / database version of every running container
+bin/platform update                    # pull newer images + recreate what changed: running core + apps
+bin/platform update --build            # also rebuild the PHP images on a fresh base image (php, security updates)
+bin/platform update shop traefik       # only these stacks
+bin/platform update --databases        # include databases (they restart: brief downtime, do it off-peak)
+```
+- Containers are recreated only when their image really changed; `versions` shows the result. Old images are pruned (`--keep-images` to keep them).
+- nginx uses the `stable-alpine` tag by default (`NGINX_TAG` in the global `.env`; `alpine` = mainline, or pin e.g. `1.30.7-alpine`). Existing apps get this from `bin/platform sync-apps --up`.
+- Pinned database tags (e.g. `MYSQL56_TAG=5.6.43`) never change on their own; edit the tag in the stack `.env`, then `platform update <db>`.
+- Portainer-owned stacks: use Portainer's "Pull and redeploy" instead, or run `platform update <stack>` (same project name).
+- `nginx -s reload` does not load a new binary; recreating the container (what `update` does) does.
+
 ## Everyday commands
 
 ```bash
